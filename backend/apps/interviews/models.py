@@ -45,6 +45,10 @@ class Interview(models.Model):
     )
     current_question_index = models.PositiveIntegerField(default=0)
     total_questions = models.PositiveIntegerField(default=0)
+    time_limit_minutes = models.PositiveIntegerField(
+        default=30,
+        help_text='Time limit for the interview in minutes'
+    )
     
     # Timestamps
     started_at = models.DateTimeField(null=True, blank=True)
@@ -146,22 +150,31 @@ class Question(models.Model):
             ('behavioral', 'Behavioral'),
             ('situational', 'Situational'),
             ('general', 'General'),
+            ('coding', 'Coding/Programming'),
         ],
         default='general',
         help_text='Type of question'
     )
     
     # MCQ fields
-    is_mcq = models.BooleanField(default=False, help_text='Whether this is an MCQ question')
+    is_mcq = models.BooleanField(default=True, help_text='Whether this is an MCQ question')
     options = models.JSONField(
         default=list,
         blank=True,
-        help_text='MCQ options (list of strings)'
+        null=True,
+        help_text='MCQ options (list of strings, 4 options for MCQ)'
     )
     correct_answer = models.CharField(
         max_length=10,
         blank=True,
-        help_text='Correct answer option (A, B, C, D, etc.)'
+        help_text='Correct answer option (A, B, C, D) for MCQ questions'
+    )
+    
+    # Skill tracking
+    skill_tags = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='List of skills this question tests (extracted from required_skills)'
     )
     
     # Question metadata

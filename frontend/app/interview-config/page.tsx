@@ -52,6 +52,7 @@ export default function InterviewConfigPage() {
       const interviewResponse = await api.interviews.create({
         resume: resumeId,
         job_description: jobDescriptionId,
+        time_limit_minutes: timeLimit,
       });
 
       const interviewId = interviewResponse.data.id;

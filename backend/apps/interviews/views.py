@@ -478,10 +478,35 @@ def generate_questions(request, interview_id):
         # Delete existing questions for this interview
         Question.objects.filter(interview=interview).delete()
         
+        # Extract skill tags from required_skills for tracking
+        skill_tags_list = []
+        if required_skills:
+            # Parse skills from comma or newline separated string
+            skills_raw = required_skills.replace('\n', ',').split(',')
+            skill_tags_list = [skill.strip() for skill in skills_raw if skill.strip()]
+        
         # Create Question objects
         created_questions = []
         for idx, q_data in enumerate(questions_data):
             is_mcq = q_data.get('is_mcq', True)  # Default to MCQ if not specified
+            
+            # For MCQ: ensure correct_answer is valid (A, B, C, or D)
+            if is_mcq:
+                correct_answer = q_data.get('correct_answer', 'A').upper().strip()
+                if correct_answer not in ['A', 'B', 'C', 'D']:
+                    correct_answer = 'A'  # Default to A if invalid
+                options = q_data.get('options', [])
+                # Ensure we have exactly 4 options
+                if not options or len(options) < 4:
+                    options = ['Option A', 'Option B', 'Option C', 'Option D']
+            else:
+                correct_answer = ''
+                options = None
+            
+            # Extract skill tags from question text or use all skills
+            question_skill_tags = q_data.get('skill_tags', skill_tags_list)
+            if not question_skill_tags:
+                question_skill_tags = skill_tags_list
             
             question = Question.objects.create(
                 interview=interview,
@@ -489,8 +514,9 @@ def generate_questions(request, interview_id):
                 question_type=q_data.get('question_type', 'general'),
                 difficulty=q_data.get('difficulty', 'medium'),
                 is_mcq=is_mcq,
-                options=q_data.get('options') if is_mcq else None,  # Only set options for MCQ
-                correct_answer=q_data.get('correct_answer', 'A') if is_mcq else '',  # Only set for MCQ
+                options=options,
+                correct_answer=correct_answer,
+                skill_tags=question_skill_tags,
                 order_index=idx,
                 generated_by_ai=True,
                 ai_model=os.getenv('LITELLM_MODEL', 'gpt-3.5-turbo')
@@ -709,18 +735,20 @@ def submit_answer(request, interview_id):
         except Exception as e:
             print(f"Error transcribing audio: {e}")
     
-    # Evaluate answer if text is available
-    if answer.answer_text and not answer.evaluated:
+    # Evaluate answer if text is available (for open-ended questions)
+    if answer.answer_text and not answer.evaluated and not question.is_mcq:
         try:
             resume_text = interview.resume.extracted_text if interview.resume else None
             job_description = interview.job_description.description if interview.job_description else None
+            required_skills = interview.job_description.required_skills if interview.job_description else None
             
             evaluation = evaluate_answer(
                 question_text=question.question_text,
                 answer_text=answer.answer_text,
                 question_type=question.question_type,
                 resume_text=resume_text,
-                job_description=job_description
+                job_description=job_description,
+                required_skills=required_skills
             )
             
             answer.score = evaluation['score']

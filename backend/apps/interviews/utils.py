@@ -70,21 +70,27 @@ def generate_interview_questions(
         
         # For OpenRouter, LiteLLM automatically uses OPENROUTER_API_KEY env var
         # For OpenAI, it uses OPENAI_API_KEY env var
-        response = completion(
-            model=model,
-            messages=[
+        completion_kwargs = {
+            "model": model,
+            "messages": [
                 {
                     "role": "system",
-                    "content": "You are an expert interview question generator. Generate relevant, professional interview questions based on the provided resume and job description."
+                    "content": "You are an expert interview question generator. Generate relevant, professional interview questions based on the provided resume and job description. ALWAYS return valid JSON format."
                 },
                 {
                     "role": "user",
                     "content": prompt
                 }
             ],
-            temperature=0.7,
-            max_tokens=1500
-        )
+            "temperature": 0.7,
+            "max_tokens": 2000
+        }
+        
+        # Add JSON response format for OpenRouter
+        if use_openrouter:
+            completion_kwargs["response_format"] = {"type": "json_object"}
+        
+        response = completion(**completion_kwargs)
         
         # Parse the response
         response_text = response.choices[0].message.content
@@ -104,12 +110,25 @@ def generate_interview_questions(
             questions_data = json.loads(response_text)
             
             # Validate and format questions
-            if isinstance(questions_data, dict) and 'questions' in questions_data:
-                questions = questions_data['questions']
+            if isinstance(questions_data, dict):
+                # Check if it's a wrapper object with 'questions' key
+                if 'questions' in questions_data:
+                    questions = questions_data['questions']
+                # Check if it's a single question object
+                elif 'question_text' in questions_data:
+                    questions = [questions_data]
+                else:
+                    # Try to find any array in the response
+                    for key, value in questions_data.items():
+                        if isinstance(value, list) and len(value) > 0:
+                            questions = value
+                            break
+                    else:
+                        raise ValueError("Invalid response format: No questions found in response")
             elif isinstance(questions_data, list):
                 questions = questions_data
             else:
-                raise ValueError("Invalid response format")
+                raise ValueError("Invalid response format: Expected JSON object or array")
             
             # Ensure we have the right number of questions
             questions = questions[:num_questions]
@@ -128,8 +147,17 @@ def generate_interview_questions(
                     
                     # Add MCQ-specific fields only if it's an MCQ
                     if is_mcq:
-                        question_data['options'] = q.get('options', [])
-                        question_data['correct_answer'] = q.get('correct_answer', 'A')
+                        options = q.get('options', [])
+                        correct_answer = q.get('correct_answer', '').upper().strip()
+                        # Validate correct_answer is A, B, C, or D
+                        if correct_answer not in ['A', 'B', 'C', 'D']:
+                            # Try to extract from options if not provided
+                            if len(options) > 0:
+                                correct_answer = 'A'  # Default to first option
+                            else:
+                                correct_answer = 'A'
+                        question_data['options'] = options
+                        question_data['correct_answer'] = correct_answer
                     else:
                         # Open-ended question
                         question_data['options'] = None
@@ -178,27 +206,43 @@ def build_question_generation_prompt(
     num_open_ended = 1  # Always 1 open-ended coding question
     
     prompt_parts = [
-        "Generate a set of professional interview questions for a candidate interview.",
+        "You are an expert technical interviewer. Generate interview questions based on the job description and required skills.",
         f"Generate exactly {num_questions} questions.",
         "",
-        "IMPORTANT REQUIREMENTS:",
-        f"- Generate {num_mcq} MULTIPLE CHOICE QUESTIONS (MCQ) with 4 options each",
-        f"- Generate {num_open_ended} OPEN-ENDED CODING QUESTION (programming/coding question)",
-        "- Mix of technical, behavioral, and situational questions for MCQ",
-        "- The open-ended question MUST be a coding/programming question",
-        "- Questions should be relevant to the candidate's background and the job role",
-        "- Vary the difficulty levels (easy, medium, hard)",
+        "CRITICAL REQUIREMENTS - READ CAREFULLY:",
         "",
-        "For MCQ questions:",
-        "- Each question must have exactly 4 options (A, B, C, D)",
-        "- Mark the correct answer option",
-        "- Set is_mcq: true",
+        "1. QUESTION CONTENT (MOST IMPORTANT):",
+        "   - ALL questions MUST be directly related to the REQUIRED SKILLS mentioned in the job description",
+        "   - For technical roles: Generate questions about specific technologies, frameworks, and tools mentioned in required_skills",
+        "   - For coding questions: Use programming languages and concepts from required_skills",
+        "   - Questions should test practical knowledge of the skills listed",
+        "   - DO NOT generate generic questions - they MUST be skill-specific",
         "",
-        "For open-ended coding questions:",
-        "- Should be a practical coding problem or algorithm question",
-        "- Do NOT provide options",
-        "- Set is_mcq: false",
-        "- Set question_type: 'coding'",
+        "2. QUESTION TYPES:",
+        f"   - Generate {num_mcq} MULTIPLE CHOICE QUESTIONS (MCQ) with 4 options each",
+        f"   - Generate {num_open_ended} OPEN-ENDED CODING QUESTION (programming/coding question)",
+        "   - MCQ questions should test knowledge of specific skills from required_skills",
+        "   - The open-ended question MUST be a coding/programming question related to required_skills",
+        "",
+        "3. MCQ REQUIREMENTS:",
+        "   - Each MCQ must have exactly 4 options (A, B, C, D)",
+        "   - ONE option must be clearly marked as correct_answer (A, B, C, or D)",
+        "   - Options should be realistic and plausible",
+        "   - The correct answer should test understanding of the specific skill",
+        "   - Set is_mcq: true",
+        "",
+        "4. OPEN-ENDED CODING QUESTION REQUIREMENTS:",
+        "   - Must be a practical coding problem or algorithm question",
+        "   - Should use programming languages/frameworks from required_skills",
+        "   - Should test problem-solving and coding ability",
+        "   - Do NOT provide options",
+        "   - Set is_mcq: false",
+        "   - Set question_type: 'coding'",
+        "",
+        "5. DIFFICULTY AND RELEVANCE:",
+        "   - Vary difficulty levels (easy, medium, hard) based on experience_level",
+        "   - Questions must be relevant to the job role and required skills",
+        "   - Consider the candidate's background from resume if provided",
         "",
         "Return the response as a JSON array with the following structure:",
         "",
@@ -223,8 +267,13 @@ def build_question_generation_prompt(
         ""
     ]
     
+    # Add job information - emphasize required skills
+    prompt_parts.append("\n" + "="*60)
+    prompt_parts.append("JOB INFORMATION - USE THIS TO GENERATE QUESTIONS:")
+    prompt_parts.append("="*60)
+    
     if job_title:
-        prompt_parts.append(f"Job Title: {job_title}")
+        prompt_parts.append(f"\nJob Title: {job_title}")
     
     if experience_level:
         level_map = {
@@ -236,10 +285,14 @@ def build_question_generation_prompt(
         prompt_parts.append(f"Experience Level: {level_map.get(experience_level, experience_level)}")
     
     if required_skills:
-        prompt_parts.append(f"Required Skills: {required_skills}")
+        prompt_parts.append(f"\n*** REQUIRED SKILLS (MOST IMPORTANT - Generate questions based on these): ***")
+        prompt_parts.append(f"{required_skills}")
+        prompt_parts.append("\nIMPORTANT: Your questions MUST test knowledge of these specific skills!")
     
     if job_description:
-        prompt_parts.append(f"\nJob Description:\n{job_description[:1000]}")  # Limit length
+        prompt_parts.append(f"\nFull Job Description:\n{job_description[:1500]}")  # Increased limit
+    
+    prompt_parts.append("\n" + "="*60)
     
     if resume_text:
         prompt_parts.append(f"\nCandidate Resume Summary:\n{resume_text[:1000]}")  # Limit length
@@ -427,7 +480,8 @@ def evaluate_answer(
     answer_text: str,
     question_type: str,
     resume_text: Optional[str] = None,
-    job_description: Optional[str] = None
+    job_description: Optional[str] = None,
+    required_skills: Optional[str] = None
 ) -> Dict[str, any]:
     """
     Evaluate an answer using AI and return score and feedback
@@ -448,28 +502,42 @@ def evaluate_answer(
         import litellm
         from litellm import completion
         
-        # Build evaluation prompt
-        prompt = f"""Evaluate the following interview answer and provide:
-1. A score out of 10
-2. Detailed evaluation
-3. Strengths identified
-4. Areas for improvement
+        # Build evaluation prompt with emphasis on job requirements
+        prompt = f"""You are an expert technical interviewer evaluating a candidate's answer.
+
+EVALUATION CRITERIA:
+1. Technical accuracy and correctness
+2. Relevance to the question asked
+3. Code quality (for coding questions): correctness, efficiency, readability, best practices
+4. Problem-solving approach and logic
+5. Completeness of the answer
 
 Question Type: {question_type}
 Question: {question_text}
 
-Answer: {answer_text}
+Candidate's Answer:
+{answer_text}
 
+{f"Job Description Context: {job_description[:800]}" if job_description else ""}
+{f"Required Skills: {required_skills}" if required_skills else ""}
 {f"Resume Context: {resume_text[:500]}" if resume_text else ""}
-{f"Job Description: {job_description[:500]}" if job_description else ""}
+
+{"IMPORTANT: This is a CODING question. Evaluate:" if question_type == 'coding' else ""}
+{"- Code correctness and functionality" if question_type == 'coding' else ""}
+{"- Algorithm efficiency and time/space complexity" if question_type == 'coding' else ""}
+{"- Code quality: readability, naming conventions, structure" if question_type == 'coding' else ""}
+{"- Edge case handling" if question_type == 'coding' else ""}
+{"- Best practices and clean code principles" if question_type == 'coding' else ""}
 
 Provide your evaluation in JSON format:
 {{
-    "score": <number 0-10>,
-    "evaluation": "<detailed evaluation>",
-    "strengths": "<list of strengths>",
-    "improvements": "<suggested improvements>"
-}}"""
+    "score": <number 0-10, where 10 is excellent and 0 is poor>,
+    "evaluation": "<detailed evaluation explaining the score and what the candidate did well or poorly>",
+    "strengths": "<specific strengths identified in the answer>",
+    "improvements": "<specific, actionable suggestions for improvement>"
+}}
+
+Be thorough and constructive in your feedback."""
 
         # Get API key from environment (OpenRouter or OpenAI)
         api_key = os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY') or os.getenv('LITELLM_API_KEY')
@@ -496,21 +564,27 @@ Provide your evaluation in JSON format:
             os.environ['OPENROUTER_API_KEY'] = api_key
         
         # For OpenRouter, LiteLLM automatically uses OPENROUTER_API_KEY env var
-        response = completion(
-            model=model,
-            messages=[
+        completion_kwargs = {
+            "model": model,
+            "messages": [
                 {
                     "role": "system",
-                    "content": "You are an expert interview evaluator. Provide fair, constructive feedback."
+                    "content": "You are an expert interview evaluator. Provide fair, constructive feedback. ALWAYS return valid JSON format."
                 },
                 {
                     "role": "user",
                     "content": prompt
                 }
             ],
-            temperature=0.5,
-            max_tokens=1000
-        )
+            "temperature": 0.5,
+            "max_tokens": 1500
+        }
+        
+        # Add JSON response format for OpenRouter
+        if use_openrouter:
+            completion_kwargs["response_format"] = {"type": "json_object"}
+        
+        response = completion(**completion_kwargs)
         
         response_text = response.choices[0].message.content
         

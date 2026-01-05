@@ -72,6 +72,7 @@ class InterviewSerializer(serializers.ModelSerializer):
             'title',
             'current_question_index',
             'total_questions',
+            'time_limit_minutes',
             'started_at',
             'completed_at',
             'created_at',
@@ -99,6 +100,7 @@ class InterviewCreateSerializer(serializers.ModelSerializer):
             'resume',
             'job_description',
             'title',
+            'time_limit_minutes',
         ]
     
     def validate(self, data):
@@ -125,6 +127,7 @@ class QuestionSerializer(serializers.ModelSerializer):
             'is_mcq',
             'options',
             'correct_answer',
+            'skill_tags',
             'generated_by_ai',
             'ai_model',
             'created_at',
