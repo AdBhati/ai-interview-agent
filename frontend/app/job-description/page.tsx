@@ -290,6 +290,24 @@ export default function JobDescriptionPage() {
                 Cancel
               </button>
             </div>
+            
+            {/* View Matches Button (if JD already exists) */}
+            {success && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const jdId = localStorage.getItem('jobDescriptionId');
+                    if (jdId) {
+                      router.push(`/ats-matches?jd=${jdId}`);
+                    }
+                  }}
+                  className="w-full py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold"
+                >
+                  View ATS Matches for This Job
+                </button>
+              </div>
+            )}
           </form>
         </div>
       </div>

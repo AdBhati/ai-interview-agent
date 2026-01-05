@@ -1,5 +1,6 @@
 from django.db import models
 from apps.resumes.models import Resume
+from decimal import Decimal
 
 
 class Interview(models.Model):
@@ -325,3 +326,111 @@ class InterviewReport(models.Model):
     
     def __str__(self):
         return f"Report for Interview #{self.interview.id} - Score: {self.overall_score}/10"
+
+
+class ATSMatch(models.Model):
+    """
+    ATS Matching model to store job description and resume matching results
+    """
+    job_description = models.ForeignKey(
+        JobDescription,
+        on_delete=models.CASCADE,
+        related_name='ats_matches',
+        help_text='Job description being matched'
+    )
+    resume = models.ForeignKey(
+        Resume,
+        on_delete=models.CASCADE,
+        related_name='ats_matches',
+        help_text='Resume being matched'
+    )
+    
+    # Match scores (0-100)
+    overall_score = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        help_text='Overall ATS match score (0-100)'
+    )
+    skills_score = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0.0,
+        help_text='Skills match score (0-100)'
+    )
+    experience_score = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0.0,
+        help_text='Experience match score (0-100)'
+    )
+    education_score = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0.0,
+        help_text='Education match score (0-100)'
+    )
+    
+    # AI Analysis
+    match_analysis = models.TextField(
+        blank=True,
+        help_text='Detailed AI analysis of the match'
+    )
+    strengths = models.TextField(
+        blank=True,
+        help_text='Key strengths identified'
+    )
+    gaps = models.TextField(
+        blank=True,
+        help_text='Gaps or missing requirements'
+    )
+    recommendations = models.TextField(
+        blank=True,
+        help_text='Recommendations for improvement'
+    )
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('matched', 'Matched'),
+            ('reviewed', 'Reviewed'),
+            ('rejected', 'Rejected'),
+        ],
+        default='matched',
+        help_text='Match status'
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    matched_at = models.DateTimeField(auto_now_add=True, help_text='When the match was created')
+    
+    class Meta:
+        ordering = ['-overall_score', '-created_at']
+        verbose_name = 'ATS Match'
+        verbose_name_plural = 'ATS Matches'
+        unique_together = ['job_description', 'resume']  # One match per JD-Resume pair
+    
+    def __str__(self):
+        return f"Match: {self.resume.original_filename} → {self.job_description.title} ({self.overall_score}%)"
+    
+    @property
+    def match_percentage(self):
+        """Return match score as percentage"""
+        return float(self.overall_score)
+    
+    @property
+    def is_strong_match(self):
+        """Return True if match score is >= 70%"""
+        return self.overall_score >= Decimal('70.0')
+    
+    @property
+    def is_moderate_match(self):
+        """Return True if match score is between 50-70%"""
+        return Decimal('50.0') <= self.overall_score < Decimal('70.0')
+    
+    @property
+    def is_weak_match(self):
+        """Return True if match score is < 50%"""
+        return self.overall_score < Decimal('50.0')

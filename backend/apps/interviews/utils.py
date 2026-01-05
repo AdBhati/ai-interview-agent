@@ -614,3 +614,159 @@ def generate_interview_report(interview_id: int) -> Dict[str, any]:
     except Exception as e:
         return {'error': f'Error generating report: {str(e)}'}
 
+
+def calculate_ats_match(job_description_text: str, resume_text: str, required_skills: str = "", job_title: str = "") -> Dict[str, any]:
+    """
+    Calculate ATS match score between job description and resume using AI
+    
+    Args:
+        job_description_text: Full job description text
+        resume_text: Extracted resume text
+        required_skills: Required skills (comma-separated)
+        job_title: Job title/position
+    
+    Returns:
+        Dictionary with match scores and analysis:
+        {
+            'overall_score': 85.5,
+            'skills_score': 90.0,
+            'experience_score': 80.0,
+            'education_score': 85.0,
+            'match_analysis': '...',
+            'strengths': '...',
+            'gaps': '...',
+            'recommendations': '...'
+        }
+    """
+    try:
+        # Build prompt for ATS matching
+        prompt = f"""You are an ATS (Applicant Tracking System) matching expert. Analyze the match between a job description and a candidate's resume.
+
+Job Title: {job_title}
+Job Description:
+{job_description_text}
+
+Required Skills: {required_skills}
+
+Candidate Resume:
+{resume_text}
+
+Please provide a detailed ATS match analysis in the following JSON format:
+{{
+    "overall_score": <number 0-100>,
+    "skills_score": <number 0-100>,
+    "experience_score": <number 0-100>,
+    "education_score": <number 0-100>,
+    "match_analysis": "<detailed analysis of how well the resume matches the job description>",
+    "strengths": "<key strengths and matching points>",
+    "gaps": "<missing requirements or gaps>",
+    "recommendations": "<recommendations for the candidate or recruiter>"
+}}
+
+Calculate scores based on:
+- Skills Score: How many required skills are present in the resume
+- Experience Score: How well the candidate's experience matches the job requirements
+- Education Score: How well the candidate's education matches the requirements
+- Overall Score: Weighted average (Skills: 40%, Experience: 40%, Education: 20%)
+
+Return ONLY valid JSON, no additional text."""
+
+        # Get API key
+        api_key = os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY') or os.getenv('LITELLM_API_KEY')
+        if not api_key:
+            # Fallback to basic matching without AI
+            return calculate_basic_ats_match(job_description_text, resume_text, required_skills)
+        
+        model = os.getenv('LITELLM_MODEL', 'gpt-3.5-turbo')
+        use_openrouter = os.getenv('OPENROUTER_API_KEY') is not None
+        
+        # Set API key
+        if use_openrouter:
+            os.environ['OPENROUTER_API_KEY'] = api_key
+        
+        # Call LiteLLM
+        response = completion(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are an expert ATS matching system. Always return valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            max_tokens=1500
+        )
+        
+        # Extract response
+        response_text = response.choices[0].message.content.strip()
+        
+        # Parse JSON response
+        try:
+            # Remove markdown code blocks if present
+            if response_text.startswith('```'):
+                response_text = response_text.split('```')[1]
+                if response_text.startswith('json'):
+                    response_text = response_text[4:]
+                response_text = response_text.strip()
+            
+            match_data = json.loads(response_text)
+            
+            # Validate scores are in range
+            for key in ['overall_score', 'skills_score', 'experience_score', 'education_score']:
+                if key in match_data:
+                    score = float(match_data[key])
+                    match_data[key] = max(0.0, min(100.0, score))  # Clamp between 0-100
+            
+            return match_data
+            
+        except json.JSONDecodeError as e:
+            print(f"Error parsing ATS match JSON: {e}")
+            print(f"Response text: {response_text[:200]}")
+            # Fallback to basic matching
+            return calculate_basic_ats_match(job_description_text, resume_text, required_skills)
+    
+    except Exception as e:
+        print(f"Error in calculate_ats_match: {e}")
+        # Fallback to basic matching
+        return calculate_basic_ats_match(job_description_text, resume_text, required_skills)
+
+
+def calculate_basic_ats_match(job_description_text: str, resume_text: str, required_skills: str = "") -> Dict[str, any]:
+    """
+    Basic ATS matching without AI (fallback method)
+    Uses keyword matching and simple scoring
+    """
+    # Convert to lowercase for comparison
+    jd_lower = job_description_text.lower()
+    resume_lower = resume_text.lower()
+    
+    # Skills matching
+    skills_score = 0.0
+    if required_skills:
+        skills_list = [s.strip().lower() for s in required_skills.split(',') if s.strip()]
+        matched_skills = sum(1 for skill in skills_list if skill in resume_lower)
+        if skills_list:
+            skills_score = (matched_skills / len(skills_list)) * 100
+    
+    # Experience matching (basic keyword matching)
+    experience_keywords = ['experience', 'years', 'worked', 'role', 'position', 'job']
+    experience_matches = sum(1 for keyword in experience_keywords if keyword in resume_lower)
+    experience_score = min(100.0, (experience_matches / len(experience_keywords)) * 100)
+    
+    # Education matching
+    education_keywords = ['education', 'degree', 'bachelor', 'master', 'phd', 'university', 'college']
+    education_matches = sum(1 for keyword in education_keywords if keyword in resume_lower)
+    education_score = min(100.0, (education_matches / len(education_keywords)) * 100)
+    
+    # Overall score (weighted average)
+    overall_score = (skills_score * 0.4) + (experience_score * 0.4) + (education_score * 0.2)
+    
+    return {
+        'overall_score': round(overall_score, 2),
+        'skills_score': round(skills_score, 2),
+        'experience_score': round(experience_score, 2),
+        'education_score': round(education_score, 2),
+        'match_analysis': f'Basic matching: {matched_skills if required_skills else 0} skills matched, experience and education keywords found.',
+        'strengths': 'Resume contains relevant keywords and skills.',
+        'gaps': 'Detailed analysis requires AI processing.',
+        'recommendations': 'For detailed analysis, ensure API keys are configured.'
+    }
+

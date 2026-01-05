@@ -106,6 +106,18 @@ export const api = {
     // Report endpoints
     generateReport: (id: number) => apiClient.post(`/api/interviews/${id}/generate-report/`),
     getReport: (id: number) => apiClient.get(`/api/interviews/${id}/report/`),
+    
+    // ATS Matching endpoints
+    matchResume: (jobDescriptionId: number, resumeId: number) => 
+      apiClient.post(`/api/interviews/job-descriptions/${jobDescriptionId}/match-resume/`, { resume_id: resumeId }),
+    matchAllResumes: (jobDescriptionId: number) => 
+      apiClient.post(`/api/interviews/job-descriptions/${jobDescriptionId}/match-all-resumes/`),
+    getMatches: (jobDescriptionId: number, params?: { status?: string; min_score?: number }) => 
+      apiClient.get(`/api/interviews/job-descriptions/${jobDescriptionId}/matches/`, { params }),
+    getAllMatches: (params?: { job_description_id?: number; status?: string; min_score?: number }) => 
+      apiClient.get('/api/interviews/ats-matches/', { params }),
+    updateMatchStatus: (matchId: number, status: string) => 
+      apiClient.patch(`/api/interviews/ats-matches/${matchId}/status/`, { status }),
   },
 
   // Audio endpoints (to be implemented)

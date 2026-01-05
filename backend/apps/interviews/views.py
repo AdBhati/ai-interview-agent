@@ -4,7 +4,7 @@ from rest_framework.decorators import api_view, parser_classes
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
-from .models import Interview, JobDescription, Question, Answer
+from .models import Interview, JobDescription, Question, Answer, ATSMatch
 from .serializers import (
     JobDescriptionSerializer, 
     JobDescriptionCreateSerializer,
@@ -12,9 +12,10 @@ from .serializers import (
     InterviewCreateSerializer,
     QuestionSerializer,
     QuestionGenerateSerializer,
-    AnswerSerializer
+    AnswerSerializer,
+    ATSMatchSerializer
 )
-from .utils import generate_interview_questions, evaluate_answer
+from .utils import generate_interview_questions, evaluate_answer, calculate_ats_match
 
 
 @api_view(['GET', 'POST'])
@@ -893,3 +894,304 @@ def get_report(request, interview_id):
             {'error': 'Report not found. Generate report first.'},
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+# ==================== ATS Matching Views ====================
+
+@api_view(['POST'])
+def match_resume_to_jd(request, job_description_id):
+    """
+    Match a resume to a job description (ATS matching)
+    
+    POST /api/interviews/job-descriptions/{id}/match-resume/
+    
+    Body:
+    {
+        "resume_id": 1
+    }
+    
+    Response:
+    {
+        "id": 1,
+        "job_description": 1,
+        "resume": 1,
+        "overall_score": 85.5,
+        "skills_score": 90.0,
+        "experience_score": 80.0,
+        "education_score": 85.0,
+        "match_analysis": "...",
+        "strengths": "...",
+        "gaps": "...",
+        "recommendations": "..."
+    }
+    """
+    try:
+        job_description = JobDescription.objects.get(id=job_description_id)
+    except JobDescription.DoesNotExist:
+        return Response(
+            {'error': 'Job description not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    resume_id = request.data.get('resume_id')
+    if not resume_id:
+        return Response(
+            {'error': 'resume_id is required'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        from apps.resumes.models import Resume
+        resume = Resume.objects.get(id=resume_id)
+    except Resume.DoesNotExist:
+        return Response(
+            {'error': 'Resume not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Check if match already exists
+    match, created = ATSMatch.objects.get_or_create(
+        job_description=job_description,
+        resume=resume,
+        defaults={'overall_score': 0.0}  # Temporary, will be updated
+    )
+    
+    # Calculate ATS match
+    if not resume.extracted_text:
+        return Response(
+            {'error': 'Resume text not extracted. Please extract text first.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    match_data = calculate_ats_match(
+        job_description_text=job_description.description,
+        resume_text=resume.extracted_text,
+        required_skills=job_description.required_skills or '',
+        job_title=job_description.title
+    )
+    
+    # Update match with calculated scores
+    from decimal import Decimal
+    match.overall_score = Decimal(str(match_data.get('overall_score', 0.0)))
+    match.skills_score = Decimal(str(match_data.get('skills_score', 0.0)))
+    match.experience_score = Decimal(str(match_data.get('experience_score', 0.0)))
+    match.education_score = Decimal(str(match_data.get('education_score', 0.0)))
+    match.match_analysis = match_data.get('match_analysis', '')
+    match.strengths = match_data.get('strengths', '')
+    match.gaps = match_data.get('gaps', '')
+    match.recommendations = match_data.get('recommendations', '')
+    match.status = 'matched'
+    match.save()
+    
+    serializer = ATSMatchSerializer(match)
+    return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+def match_all_resumes_to_jd(request, job_description_id):
+    """
+    Match all resumes to a job description (batch matching)
+    
+    POST /api/interviews/job-descriptions/{id}/match-all-resumes/
+    
+    Response:
+    {
+        "job_description_id": 1,
+        "matches_created": 5,
+        "matches": [...]
+    }
+    """
+    try:
+        job_description = JobDescription.objects.get(id=job_description_id)
+    except JobDescription.DoesNotExist:
+        return Response(
+            {'error': 'Job description not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    from apps.resumes.models import Resume
+    resumes = Resume.objects.filter(status='extracted', extracted_text__isnull=False).exclude(extracted_text='')
+    
+    matches_created = 0
+    matches_data = []
+    
+    for resume in resumes:
+        # Check if match already exists
+        match, created = ATSMatch.objects.get_or_create(
+            job_description=job_description,
+            resume=resume,
+            defaults={'overall_score': 0.0}
+        )
+        
+        # Only calculate if newly created or if match score is 0
+        if created or match.overall_score == 0.0:
+            match_data = calculate_ats_match(
+                job_description_text=job_description.description,
+                resume_text=resume.extracted_text,
+                required_skills=job_description.required_skills or '',
+                job_title=job_description.title
+            )
+            
+            from decimal import Decimal
+            match.overall_score = Decimal(str(match_data.get('overall_score', 0.0)))
+            match.skills_score = Decimal(str(match_data.get('skills_score', 0.0)))
+            match.experience_score = Decimal(str(match_data.get('experience_score', 0.0)))
+            match.education_score = Decimal(str(match_data.get('education_score', 0.0)))
+            match.match_analysis = match_data.get('match_analysis', '')
+            match.strengths = match_data.get('strengths', '')
+            match.gaps = match_data.get('gaps', '')
+            match.recommendations = match_data.get('recommendations', '')
+            match.status = 'matched'
+            match.save()
+            
+            if created:
+                matches_created += 1
+        
+        serializer = ATSMatchSerializer(match)
+        matches_data.append(serializer.data)
+    
+    # Sort by overall_score descending
+    matches_data.sort(key=lambda x: x['overall_score'], reverse=True)
+    
+    return Response({
+        'job_description_id': job_description_id,
+        'job_description_title': job_description.title,
+        'matches_created': matches_created,
+        'total_matches': len(matches_data),
+        'matches': matches_data
+    })
+
+
+@api_view(['GET'])
+def get_ats_matches(request, job_description_id):
+    """
+    Get all ATS matches for a job description
+    
+    GET /api/interviews/job-descriptions/{id}/matches/
+    
+    Query params:
+    - status: Filter by status (matched, reviewed, rejected)
+    - min_score: Minimum overall score (0-100)
+    
+    Response:
+    {
+        "job_description_id": 1,
+        "total_matches": 5,
+        "matches": [...]
+    }
+    """
+    try:
+        job_description = JobDescription.objects.get(id=job_description_id)
+    except JobDescription.DoesNotExist:
+        return Response(
+            {'error': 'Job description not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    matches = ATSMatch.objects.filter(job_description=job_description)
+    
+    # Filter by status
+    status_filter = request.query_params.get('status')
+    if status_filter:
+        matches = matches.filter(status=status_filter)
+    
+    # Filter by minimum score
+    min_score = request.query_params.get('min_score')
+    if min_score:
+        try:
+            from decimal import Decimal
+            matches = matches.filter(overall_score__gte=Decimal(min_score))
+        except (ValueError, TypeError):
+            pass
+    
+    serializer = ATSMatchSerializer(matches, many=True)
+    
+    return Response({
+        'job_description_id': job_description_id,
+        'job_description_title': job_description.title,
+        'total_matches': matches.count(),
+        'matches': serializer.data
+    })
+
+
+@api_view(['GET'])
+def get_all_ats_matches(request):
+    """
+    Get all ATS matches across all job descriptions
+    
+    GET /api/interviews/ats-matches/
+    
+    Query params:
+    - job_description_id: Filter by job description ID
+    - status: Filter by status
+    - min_score: Minimum overall score
+    
+    Response:
+    {
+        "total_matches": 20,
+        "matches": [...]
+    }
+    """
+    matches = ATSMatch.objects.all()
+    
+    # Filter by job description
+    jd_id = request.query_params.get('job_description_id')
+    if jd_id:
+        matches = matches.filter(job_description_id=jd_id)
+    
+    # Filter by status
+    status_filter = request.query_params.get('status')
+    if status_filter:
+        matches = matches.filter(status=status_filter)
+    
+    # Filter by minimum score
+    min_score = request.query_params.get('min_score')
+    if min_score:
+        try:
+            from decimal import Decimal
+            matches = matches.filter(overall_score__gte=Decimal(min_score))
+        except (ValueError, TypeError):
+            pass
+    
+    serializer = ATSMatchSerializer(matches, many=True)
+    
+    return Response({
+        'total_matches': matches.count(),
+        'matches': serializer.data
+    })
+
+
+@api_view(['PATCH'])
+def update_ats_match_status(request, match_id):
+    """
+    Update ATS match status (reviewed, rejected, etc.)
+    
+    PATCH /api/interviews/ats-matches/{id}/status/
+    
+    Body:
+    {
+        "status": "reviewed"  // or "rejected"
+    }
+    
+    Response:
+    {
+        "id": 1,
+        "status": "reviewed",
+        ...
+    }
+    """
+    try:
+        match = ATSMatch.objects.get(id=match_id)
+    except ATSMatch.DoesNotExist:
+        return Response(
+            {'error': 'ATS match not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    new_status = request.data.get('status')
+    if new_status and new_status in ['matched', 'reviewed', 'rejected', 'pending']:
+        match.status = new_status
+        match.save()
+    
+    serializer = ATSMatchSerializer(match)
+    return Response(serializer.data)

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Interview, JobDescription, Question, Answer, InterviewReport
+from .models import Interview, JobDescription, Question, Answer, InterviewReport, ATSMatch
 from apps.resumes.serializers import ResumeSerializer
 
 
@@ -224,4 +224,58 @@ class InterviewReportSerializer(serializers.ModelSerializer):
             'id',
             'generated_at',
             'updated_at',
+        ]
+
+
+class ATSMatchSerializer(serializers.ModelSerializer):
+    """Serializer for ATSMatch model"""
+    job_description_details = JobDescriptionSerializer(source='job_description', read_only=True)
+    resume_details = ResumeSerializer(source='resume', read_only=True)
+    match_percentage = serializers.ReadOnlyField()
+    is_strong_match = serializers.ReadOnlyField()
+    is_moderate_match = serializers.ReadOnlyField()
+    is_weak_match = serializers.ReadOnlyField()
+    
+    class Meta:
+        model = ATSMatch
+        fields = [
+            'id',
+            'job_description',
+            'job_description_details',
+            'resume',
+            'resume_details',
+            'overall_score',
+            'skills_score',
+            'experience_score',
+            'education_score',
+            'match_analysis',
+            'strengths',
+            'gaps',
+            'recommendations',
+            'status',
+            'match_percentage',
+            'is_strong_match',
+            'is_moderate_match',
+            'is_weak_match',
+            'created_at',
+            'updated_at',
+            'matched_at',
+        ]
+        read_only_fields = [
+            'id',
+            'overall_score',
+            'skills_score',
+            'experience_score',
+            'education_score',
+            'match_analysis',
+            'strengths',
+            'gaps',
+            'recommendations',
+            'match_percentage',
+            'is_strong_match',
+            'is_moderate_match',
+            'is_weak_match',
+            'created_at',
+            'updated_at',
+            'matched_at',
         ]
