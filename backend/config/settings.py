@@ -98,7 +98,7 @@ import dj_database_url
 DATABASE_URL = os.getenv('DATABASE_URL')
 
 if DATABASE_URL:
-    # Use DATABASE_URL (Heroku)
+    # Use DATABASE_URL (Heroku or if set locally)
     DATABASES = {
         'default': dj_database_url.config(
             default=DATABASE_URL,
