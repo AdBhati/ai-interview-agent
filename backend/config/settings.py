@@ -94,21 +94,22 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database configuration
 # Heroku uses DATABASE_URL, otherwise use individual settings
-try:
-    import dj_database_url
-    DATABASE_URL = os.getenv('DATABASE_URL')
-    if DATABASE_URL:
-        DATABASES = {
-            'default': dj_database_url.config(
-                default=DATABASE_URL,
-                conn_max_age=600,
-                conn_health_checks=True,
-            )
-        }
-    else:
-        raise ValueError("No DATABASE_URL")
-except (ImportError, ValueError):
-    # Fallback to individual settings
+import dj_database_url
+
+# Get DATABASE_URL from environment (Heroku sets this automatically)
+DATABASE_URL = os.getenv('DATABASE_URL')
+
+if DATABASE_URL:
+    # Use DATABASE_URL (Heroku)
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
+else:
+    # Fallback to individual settings (local development)
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
