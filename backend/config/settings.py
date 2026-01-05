@@ -122,7 +122,8 @@ else:
     }
 
 # Fallback to SQLite for development if PostgreSQL is not available
-if os.getenv('USE_SQLITE', 'False') == 'True':
+# Only if DATABASE_URL is not set (not on Heroku)
+if os.getenv('USE_SQLITE', 'False') == 'True' and not DATABASE_URL:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
