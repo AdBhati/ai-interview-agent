@@ -122,6 +122,9 @@ class QuestionSerializer(serializers.ModelSerializer):
             'question_type',
             'order_index',
             'difficulty',
+            'is_mcq',
+            'options',
+            'correct_answer',
             'generated_by_ai',
             'ai_model',
             'created_at',
@@ -149,6 +152,9 @@ class QuestionGenerateSerializer(serializers.Serializer):
 class AnswerSerializer(serializers.ModelSerializer):
     """Serializer for Answer model"""
     question_text = serializers.CharField(source='question.question_text', read_only=True)
+    question_is_mcq = serializers.BooleanField(source='question.is_mcq', read_only=True)
+    question_options = serializers.JSONField(source='question.options', read_only=True)
+    question_correct_answer = serializers.CharField(source='question.correct_answer', read_only=True)
     
     class Meta:
         model = Answer
@@ -157,7 +163,12 @@ class AnswerSerializer(serializers.ModelSerializer):
             'interview',
             'question',
             'question_text',
+            'question_is_mcq',
+            'question_options',
+            'question_correct_answer',
             'answer_text',
+            'selected_option',
+            'is_correct',
             'audio_file',
             'score',
             'evaluation',
@@ -171,6 +182,10 @@ class AnswerSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = [
             'id',
+            'question_is_mcq',
+            'question_options',
+            'question_correct_answer',
+            'is_correct',
             'score',
             'evaluation',
             'strengths',

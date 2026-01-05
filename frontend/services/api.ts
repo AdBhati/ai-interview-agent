@@ -102,6 +102,14 @@ export const api = {
     submitAnswer: (id: number, formData: FormData) => apiClient.post(`/api/interviews/${id}/submit-answer/`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+    submitMCQAnswer: (id: number, questionId: number, selectedOption: string) => {
+      const formData = new FormData();
+      formData.append('question', questionId.toString());
+      formData.append('selected_option', selectedOption);
+      return apiClient.post(`/api/interviews/${id}/submit-answer/`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
     getAnswers: (id: number) => apiClient.get(`/api/interviews/${id}/answers/`),
     // Report endpoints
     generateReport: (id: number) => apiClient.post(`/api/interviews/${id}/generate-report/`),

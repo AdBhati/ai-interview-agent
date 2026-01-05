@@ -1,12 +1,24 @@
 'use client';
 
 /**
- * Job Description Page
- * Input job description for personalized interview questions
+ * Job Description Page - List View with Create Form
+ * Shows all job descriptions, can create new ones
  */
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/services/api';
+
+interface JobDescription {
+  id: number;
+  title: string;
+  company: string;
+  description: string;
+  required_skills: string;
+  experience_level: string;
+  location: string;
+  salary_range: string;
+  created_at: string;
+}
 
 interface JobDescriptionForm {
   title: string;
@@ -20,6 +32,9 @@ interface JobDescriptionForm {
 
 export default function JobDescriptionPage() {
   const router = useRouter();
+  const [jobDescriptions, setJobDescriptions] = useState<JobDescription[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState<JobDescriptionForm>({
     title: '',
     company: '',
@@ -31,16 +46,23 @@ export default function JobDescriptionPage() {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [resumeId, setResumeId] = useState<number | null>(null);
 
   useEffect(() => {
-    // Get resume ID from localStorage if available
-    const storedResumeId = localStorage.getItem('resumeId');
-    if (storedResumeId) {
-      setResumeId(parseInt(storedResumeId));
-    }
+    loadJobDescriptions();
   }, []);
+
+  const loadJobDescriptions = async () => {
+    setLoading(true);
+    try {
+      const response = await api.jobDescriptions.list();
+      setJobDescriptions(response.data || []);
+    } catch (err: any) {
+      console.error('Error loading job descriptions:', err);
+      setError('Failed to load job descriptions');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -63,10 +85,9 @@ export default function JobDescriptionPage() {
 
     setSaving(true);
     setError(null);
-    setSuccess(false);
 
     try {
-      const payload: any = {
+      const response = await api.jobDescriptions.create({
         title: formData.title.trim(),
         company: formData.company.trim(),
         description: formData.description.trim(),
@@ -74,29 +95,24 @@ export default function JobDescriptionPage() {
         experience_level: formData.experience_level,
         location: formData.location.trim(),
         salary_range: formData.salary_range.trim(),
-      };
-
-      // Add resume ID if available
-      if (resumeId) {
-        payload.resume = resumeId;
-      }
-
-      const response = await api.jobDescriptions.create(payload);
+      });
       
-      console.log('Job description created:', response.data);
+      // Reset form
+      setFormData({
+        title: '',
+        company: '',
+        description: '',
+        required_skills: '',
+        experience_level: 'mid',
+        location: '',
+        salary_range: '',
+      });
+      setShowCreateForm(false);
       
-      // Store job description ID
-      if (response.data.id) {
-        localStorage.setItem('jobDescriptionId', response.data.id.toString());
-      }
-
-      setSuccess(true);
-      setTimeout(() => {
-        router.push('/interview');
-      }, 1500);
+      // Reload list
+      loadJobDescriptions();
     } catch (err: any) {
       console.error('Error creating job description:', err);
-      
       if (err.response?.data) {
         const errorData = err.response.data;
         if (errorData.title) {
@@ -116,202 +132,244 @@ export default function JobDescriptionPage() {
     }
   };
 
+  const handleViewATS = (jdId: number) => {
+    router.push(`/ats-matches?jd=${jdId}`);
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Job Description
-          </h1>
-          <p className="text-gray-600 mb-8">
-            Enter the job description to get personalized interview questions
-          </p>
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">
+              Job Descriptions
+            </h1>
+            <p className="text-gray-600">
+              Manage job descriptions and view ATS matches
+            </p>
+          </div>
+          <button
+            onClick={() => setShowCreateForm(!showCreateForm)}
+            className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold"
+          >
+            {showCreateForm ? 'Cancel' : '+ Create New JD'}
+          </button>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Job Title */}
-            <div>
-              <label htmlFor="title" className="block text-sm font-semibold text-gray-700 mb-2">
-                Job Title <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                id="title"
-                name="title"
-                value={formData.title}
-                onChange={handleChange}
-                required
-                placeholder="e.g., Software Engineer, Product Manager"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+        {/* Create Form */}
+        {showCreateForm && (
+          <div className="bg-white rounded-lg shadow-lg p-8 mb-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-6">Create Job Description</h2>
+            
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label htmlFor="title" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Job Title <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    id="title"
+                    name="title"
+                    value={formData.title}
+                    onChange={handleChange}
+                    required
+                    placeholder="e.g., Software Engineer"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
 
-            {/* Company */}
-            <div>
-              <label htmlFor="company" className="block text-sm font-semibold text-gray-700 mb-2">
-                Company Name
-              </label>
-              <input
-                type="text"
-                id="company"
-                name="company"
-                value={formData.company}
-                onChange={handleChange}
-                placeholder="e.g., Tech Corp, Startup Inc"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* Job Description */}
-            <div>
-              <label htmlFor="description" className="block text-sm font-semibold text-gray-700 mb-2">
-                Job Description <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                required
-                rows={8}
-                placeholder="Paste the full job description here..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                {formData.description.length} characters
-              </p>
-            </div>
-
-            {/* Required Skills */}
-            <div>
-              <label htmlFor="required_skills" className="block text-sm font-semibold text-gray-700 mb-2">
-                Required Skills
-              </label>
-              <textarea
-                id="required_skills"
-                name="required_skills"
-                value={formData.required_skills}
-                onChange={handleChange}
-                rows={3}
-                placeholder="e.g., Python, React, Django, AWS (comma or newline separated)"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              />
-            </div>
-
-            {/* Experience Level and Location Row */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label htmlFor="experience_level" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Experience Level
-                </label>
-                <select
-                  id="experience_level"
-                  name="experience_level"
-                  value={formData.experience_level}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="entry">Entry Level</option>
-                  <option value="mid">Mid Level</option>
-                  <option value="senior">Senior Level</option>
-                  <option value="executive">Executive</option>
-                </select>
+                <div>
+                  <label htmlFor="company" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Company Name
+                  </label>
+                  <input
+                    type="text"
+                    id="company"
+                    name="company"
+                    value={formData.company}
+                    onChange={handleChange}
+                    placeholder="e.g., Tech Corp"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
 
               <div>
-                <label htmlFor="location" className="block text-sm font-semibold text-gray-700 mb-2">
-                  Location
+                <label htmlFor="description" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Job Description <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  id="location"
-                  name="location"
-                  value={formData.location}
+                <textarea
+                  id="description"
+                  name="description"
+                  value={formData.description}
                   onChange={handleChange}
-                  placeholder="e.g., Remote, San Francisco, New York"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                  rows={6}
+                  placeholder="Paste the full job description here..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                 />
               </div>
-            </div>
 
-            {/* Salary Range */}
-            <div>
-              <label htmlFor="salary_range" className="block text-sm font-semibold text-gray-700 mb-2">
-                Salary Range (Optional)
-              </label>
-              <input
-                type="text"
-                id="salary_range"
-                name="salary_range"
-                value={formData.salary_range}
-                onChange={handleChange}
-                placeholder="e.g., $80k - $120k, £50k - £70k"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            {/* Resume Info */}
-            {resumeId && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-sm text-blue-700">
-                  ✓ This job description will be linked to your uploaded resume
-                </p>
+              <div>
+                <label htmlFor="required_skills" className="block text-sm font-semibold text-gray-700 mb-2">
+                  Required Skills
+                </label>
+                <textarea
+                  id="required_skills"
+                  name="required_skills"
+                  value={formData.required_skills}
+                  onChange={handleChange}
+                  rows={2}
+                  placeholder="e.g., Python, React, Django, AWS"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                />
               </div>
-            )}
 
-            {/* Error Message */}
-            {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-                {error}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label htmlFor="experience_level" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Experience Level
+                  </label>
+                  <select
+                    id="experience_level"
+                    name="experience_level"
+                    value={formData.experience_level}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="entry">Entry Level</option>
+                    <option value="mid">Mid Level</option>
+                    <option value="senior">Senior Level</option>
+                    <option value="executive">Executive</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="location" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Location
+                  </label>
+                  <input
+                    type="text"
+                    id="location"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleChange}
+                    placeholder="e.g., Remote, San Francisco"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="salary_range" className="block text-sm font-semibold text-gray-700 mb-2">
+                    Salary Range
+                  </label>
+                  <input
+                    type="text"
+                    id="salary_range"
+                    name="salary_range"
+                    value={formData.salary_range}
+                    onChange={handleChange}
+                    placeholder="e.g., $80k - $120k"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
               </div>
-            )}
 
-            {/* Success Message */}
-            {success && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
-                Job description saved successfully! Redirecting to interview...
-              </div>
-            )}
+              {error && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                  {error}
+                </div>
+              )}
 
-            {/* Action Buttons */}
-            <div className="flex gap-4">
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex-1 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-semibold"
-              >
-                {saving ? 'Saving...' : 'Save & Continue to Interview'}
-              </button>
-              <button
-                type="button"
-                onClick={() => router.back()}
-                disabled={saving}
-                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:bg-gray-100 disabled:cursor-not-allowed transition-colors font-semibold"
-              >
-                Cancel
-              </button>
-            </div>
-            
-            {/* View Matches Button (if JD already exists) */}
-            {success && (
-              <div className="mt-4">
+              <div className="flex gap-4">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex-1 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors font-semibold"
+                >
+                  {saving ? 'Saving...' : 'Save Job Description'}
+                </button>
                 <button
                   type="button"
                   onClick={() => {
-                    const jdId = localStorage.getItem('jobDescriptionId');
-                    if (jdId) {
-                      router.push(`/ats-matches?jd=${jdId}`);
-                    }
+                    setShowCreateForm(false);
+                    setError(null);
                   }}
-                  className="w-full py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold"
+                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
                 >
-                  View ATS Matches for This Job
+                  Cancel
                 </button>
               </div>
-            )}
-          </form>
-        </div>
+            </form>
+          </div>
+        )}
+
+        {/* Job Descriptions List */}
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            <p className="mt-4 text-gray-600">Loading job descriptions...</p>
+          </div>
+        ) : jobDescriptions.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-lg p-12 text-center">
+            <p className="text-gray-600 mb-4">No job descriptions yet.</p>
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold"
+            >
+              Create Your First Job Description
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {jobDescriptions.map((jd) => (
+              <div
+                key={jd.id}
+                className="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow cursor-pointer"
+                onClick={() => handleViewATS(jd.id)}
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-gray-800 mb-1">{jd.title}</h3>
+                    {jd.company && (
+                      <p className="text-gray-600 text-sm mb-2">{jd.company}</p>
+                    )}
+                  </div>
+                </div>
+                
+                <p className="text-gray-700 text-sm mb-4 line-clamp-3">
+                  {jd.description.substring(0, 150)}...
+                </p>
+
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {jd.location && (
+                    <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                      📍 {jd.location}
+                    </span>
+                  )}
+                  {jd.experience_level && (
+                    <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                      {jd.experience_level}
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleViewATS(jd.id);
+                  }}
+                  className="w-full py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold"
+                >
+                  View ATS Matches →
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
-

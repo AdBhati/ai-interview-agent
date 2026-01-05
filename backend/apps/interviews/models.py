@@ -151,6 +151,19 @@ class Question(models.Model):
         help_text='Type of question'
     )
     
+    # MCQ fields
+    is_mcq = models.BooleanField(default=False, help_text='Whether this is an MCQ question')
+    options = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='MCQ options (list of strings)'
+    )
+    correct_answer = models.CharField(
+        max_length=10,
+        blank=True,
+        help_text='Correct answer option (A, B, C, D, etc.)'
+    )
+    
     # Question metadata
     order_index = models.PositiveIntegerField(
         default=0,
@@ -212,6 +225,16 @@ class Answer(models.Model):
         blank=True,
         null=True,
         help_text='Transcribed text answer'
+    )
+    selected_option = models.CharField(
+        max_length=10,
+        blank=True,
+        help_text='Selected MCQ option (A, B, C, D, etc.)'
+    )
+    is_correct = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text='Whether the MCQ answer is correct (null if not MCQ)'
     )
     audio_file = models.FileField(
         upload_to='answers/audio/%Y/%m/%d/',

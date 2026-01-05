@@ -160,16 +160,21 @@ def build_question_generation_prompt(
         f"Generate exactly {num_questions} questions.",
         "",
         "Requirements:",
+        "- Generate MULTIPLE CHOICE QUESTIONS (MCQ) with 4 options each",
         "- Mix of technical, behavioral, and situational questions",
         "- Questions should be relevant to the candidate's background and the job role",
         "- Vary the difficulty levels (easy, medium, hard)",
+        "- Each question must have exactly 4 options (A, B, C, D)",
+        "- Mark the correct answer option",
         "- Return the response as a JSON array with the following structure:",
         "",
         """[
     {
         "question_text": "The question text",
         "question_type": "technical|behavioral|situational|general",
-        "difficulty": "easy|medium|hard"
+        "difficulty": "easy|medium|hard",
+        "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
+        "correct_answer": "A|B|C|D"
     }
 ]""",
         ""

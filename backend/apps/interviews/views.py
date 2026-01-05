@@ -485,6 +485,9 @@ def generate_questions(request, interview_id):
                 question_text=q_data['question_text'],
                 question_type=q_data.get('question_type', 'general'),
                 difficulty=q_data.get('difficulty', 'medium'),
+                is_mcq=q_data.get('is_mcq', True),  # Default to MCQ
+                options=q_data.get('options', []),
+                correct_answer=q_data.get('correct_answer', 'A'),
                 order_index=idx,
                 generated_by_ai=True,
                 ai_model=os.getenv('LITELLM_MODEL', 'gpt-3.5-turbo')
@@ -635,7 +638,7 @@ def submit_answer(request, interview_id):
             status=status.HTTP_404_NOT_FOUND
         )
     
-    question_id = request.data.get('question_id')
+    question_id = request.data.get('question_id') or request.data.get('question')
     if not question_id:
         return Response(
             {'error': 'question_id is required'},
@@ -650,14 +653,29 @@ def submit_answer(request, interview_id):
             status=status.HTTP_404_NOT_FOUND
         )
     
+    # Handle MCQ answer
+    selected_option = request.data.get('selected_option', '')
+    is_correct = None
+    auto_score = 0.0
+    
+    if question.is_mcq and selected_option:
+        # Check if answer is correct
+        is_correct = (selected_option.upper() == question.correct_answer.upper())
+        # Auto-score MCQ: 10 if correct, 0 if wrong
+        auto_score = 10.0 if is_correct else 0.0
+    
     # Create or update answer
     answer, created = Answer.objects.get_or_create(
         interview=interview,
         question=question,
         defaults={
             'answer_text': request.data.get('answer_text', ''),
+            'selected_option': selected_option,
+            'is_correct': is_correct,
             'audio_file': request.FILES.get('audio_file'),
             'duration_seconds': request.data.get('duration_seconds'),
+            'score': auto_score,
+            'evaluated': True if question.is_mcq and selected_option else False,
         }
     )
     
@@ -665,6 +683,12 @@ def submit_answer(request, interview_id):
         # Update existing answer
         if 'answer_text' in request.data:
             answer.answer_text = request.data['answer_text']
+        if 'selected_option' in request.data:
+            answer.selected_option = request.data['selected_option']
+            if question.is_mcq:
+                answer.is_correct = (request.data['selected_option'].upper() == question.correct_answer.upper())
+                answer.score = 10.0 if answer.is_correct else 0.0
+                answer.evaluated = True
         if 'audio_file' in request.FILES:
             answer.audio_file = request.FILES['audio_file']
         if 'duration_seconds' in request.data:
