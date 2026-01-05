@@ -13,7 +13,8 @@ from .serializers import (
     QuestionSerializer,
     QuestionGenerateSerializer,
     AnswerSerializer,
-    ATSMatchSerializer
+    ATSMatchSerializer,
+    InterviewReportSerializer
 )
 from .utils import generate_interview_questions, evaluate_answer, calculate_ats_match
 
@@ -480,14 +481,16 @@ def generate_questions(request, interview_id):
         # Create Question objects
         created_questions = []
         for idx, q_data in enumerate(questions_data):
+            is_mcq = q_data.get('is_mcq', True)  # Default to MCQ if not specified
+            
             question = Question.objects.create(
                 interview=interview,
                 question_text=q_data['question_text'],
                 question_type=q_data.get('question_type', 'general'),
                 difficulty=q_data.get('difficulty', 'medium'),
-                is_mcq=q_data.get('is_mcq', True),  # Default to MCQ
-                options=q_data.get('options', []),
-                correct_answer=q_data.get('correct_answer', 'A'),
+                is_mcq=is_mcq,
+                options=q_data.get('options') if is_mcq else None,  # Only set options for MCQ
+                correct_answer=q_data.get('correct_answer', 'A') if is_mcq else '',  # Only set for MCQ
                 order_index=idx,
                 generated_by_ai=True,
                 ai_model=os.getenv('LITELLM_MODEL', 'gpt-3.5-turbo')

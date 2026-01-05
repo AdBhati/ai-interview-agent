@@ -1,8 +1,8 @@
 'use client';
 
 /**
- * MCQ Test Engine Page
- * Candidate takes MCQ test with timer
+ * Interview Test Engine Page
+ * Candidate takes test with mix of MCQ and open-ended coding questions
  */
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -20,7 +20,8 @@ interface Question {
 
 interface Answer {
   question_id: number;
-  selected_option: string;
+  selected_option?: string; // For MCQ
+  answer_text?: string; // For open-ended questions
 }
 
 export default function InterviewPage() {
@@ -35,7 +36,8 @@ export default function InterviewPage() {
   );
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [answers, setAnswers] = useState<Map<number, string>>(new Map());
+  const [answers, setAnswers] = useState<Map<number, string>>(new Map()); // For MCQ: questionId -> selectedOption
+  const [openEndedAnswers, setOpenEndedAnswers] = useState<Map<number, string>>(new Map()); // For open-ended: questionId -> answerText
   const [timeRemaining, setTimeRemaining] = useState<number>(
     timeLimitParam ? parseInt(timeLimitParam) : 1800 // Default 30 minutes
   );
@@ -75,10 +77,6 @@ export default function InterviewPage() {
 
     setLoading(true);
     try {
-      // Get interview
-      const interviewResponse = await api.interviews.get(interviewId);
-      setInterviewData(interviewResponse.data);
-
       // Get questions
       const questionsResponse = await api.interviews.getQuestions(interviewId);
       const questionsData = questionsResponse.data.questions || [];
@@ -115,6 +113,17 @@ export default function InterviewPage() {
     });
   };
 
+  const handleOpenEndedAnswerChange = (answerText: string) => {
+    const currentQuestion = questions[currentQuestionIndex];
+    if (!currentQuestion) return;
+
+    setOpenEndedAnswers((prev) => {
+      const newAnswers = new Map(prev);
+      newAnswers.set(currentQuestion.id, answerText);
+      return newAnswers;
+    });
+  };
+
   const handleNext = () => {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
@@ -141,16 +150,22 @@ export default function InterviewPage() {
     setError(null);
 
     try {
-      // Submit all answers
-      for (const [questionId, selectedOption] of answers.entries()) {
-        const question = questions.find((q) => q.id === questionId);
-        if (!question) continue;
-
+      // Submit all answers (both MCQ and open-ended)
+      for (const question of questions) {
         const formData = new FormData();
-        formData.append('question', questionId.toString());
-        formData.append('selected_option', selectedOption);
+        formData.append('question', question.id.toString());
 
-        await api.interviews.submitMCQAnswer(interviewId, questionId, selectedOption);
+        if (question.is_mcq) {
+          // Submit MCQ answer
+          const selectedOption = answers.get(question.id) || '';
+          formData.append('selected_option', selectedOption);
+          await api.interviews.submitAnswer(interviewId, formData);
+        } else {
+          // Submit open-ended answer
+          const answerText = openEndedAnswers.get(question.id) || '';
+          formData.append('answer_text', answerText);
+          await api.interviews.submitAnswer(interviewId, formData);
+        }
       }
 
       // Complete interview
@@ -180,7 +195,8 @@ export default function InterviewPage() {
 
   const currentQuestion = questions[currentQuestionIndex];
   const currentAnswer = currentQuestion ? answers.get(currentQuestion.id) : null;
-  const answeredCount = answers.size;
+  const currentOpenEndedAnswer = currentQuestion ? openEndedAnswers.get(currentQuestion.id) || '' : '';
+  const answeredCount = answers.size + openEndedAnswers.size;
   const progress = questions.length > 0 ? (answeredCount / questions.length) * 100 : 0;
 
   if (loading) {
@@ -217,7 +233,7 @@ export default function InterviewPage() {
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">MCQ Test</h1>
+              <h1 className="text-2xl font-bold text-gray-800">Interview Test</h1>
               <p className="text-gray-600">
                 Question {currentQuestionIndex + 1} of {questions.length}
               </p>
@@ -251,8 +267,12 @@ export default function InterviewPage() {
                 <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-semibold">
                   Question {currentQuestionIndex + 1}
                 </span>
-                <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm capitalize">
-                  {currentQuestion.question_type || 'General'}
+                <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                  currentQuestion.question_type === 'coding' 
+                    ? 'bg-yellow-100 text-yellow-700' 
+                    : 'bg-gray-100 text-gray-700'
+                }`}>
+                  {currentQuestion.is_mcq ? 'Multiple Choice' : 'Coding Question'}
                 </span>
               </div>
               <h2 className="text-xl font-semibold text-gray-800 mb-6">
@@ -299,6 +319,27 @@ export default function InterviewPage() {
                 })}
               </div>
             )}
+
+            {/* Open-Ended Question (Coding/Programming) */}
+            {!currentQuestion.is_mcq && (
+              <div className="space-y-4">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                  <p className="text-sm text-yellow-800">
+                    <strong>📝 Coding Question:</strong> Please write your solution in the text area below. You can write code, pseudocode, or explain your approach.
+                  </p>
+                </div>
+                <textarea
+                  value={currentOpenEndedAnswer}
+                  onChange={(e) => handleOpenEndedAnswerChange(e.target.value)}
+                  placeholder="Write your answer here... You can include code, explanations, or both."
+                  className="w-full h-64 p-4 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 resize-none font-mono text-sm"
+                  style={{ fontFamily: 'monospace' }}
+                />
+                <p className="text-xs text-gray-500">
+                  Tip: Use proper indentation and formatting for code. Explain your approach if needed.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -315,7 +356,10 @@ export default function InterviewPage() {
 
             <div className="flex gap-2">
               {questions.map((_, index) => {
-                const isAnswered = answers.has(questions[index].id);
+                const question = questions[index];
+                const isAnswered = question.is_mcq 
+                  ? answers.has(question.id) 
+                  : openEndedAnswers.has(question.id) && openEndedAnswers.get(question.id)!.trim().length > 0;
                 const isCurrent = index === currentQuestionIndex;
 
                 return (

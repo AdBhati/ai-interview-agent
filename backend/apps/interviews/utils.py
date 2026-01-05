@@ -118,16 +118,33 @@ def generate_interview_questions(
             formatted_questions = []
             for i, q in enumerate(questions):
                 if isinstance(q, dict):
-                    formatted_questions.append({
+                    is_mcq = q.get('is_mcq', True)  # Default to MCQ if not specified
+                    question_data = {
                         'question_text': q.get('question_text', q.get('question', str(q))),
                         'question_type': q.get('question_type', 'general'),
-                        'difficulty': q.get('difficulty', 'medium')
-                    })
+                        'difficulty': q.get('difficulty', 'medium'),
+                        'is_mcq': is_mcq,
+                    }
+                    
+                    # Add MCQ-specific fields only if it's an MCQ
+                    if is_mcq:
+                        question_data['options'] = q.get('options', [])
+                        question_data['correct_answer'] = q.get('correct_answer', 'A')
+                    else:
+                        # Open-ended question
+                        question_data['options'] = None
+                        question_data['correct_answer'] = None
+                    
+                    formatted_questions.append(question_data)
                 elif isinstance(q, str):
+                    # Fallback: treat as open-ended question
                     formatted_questions.append({
                         'question_text': q,
                         'question_type': 'general',
-                        'difficulty': 'medium'
+                        'difficulty': 'medium',
+                        'is_mcq': False,
+                        'options': None,
+                        'correct_answer': None
                     })
             
             return formatted_questions[:num_questions]
@@ -154,27 +171,53 @@ def build_question_generation_prompt(
 ) -> str:
     """
     Build the prompt for question generation
+    Generates a mix of MCQ (majority) and open-ended coding questions (1 out of 5)
     """
+    # Calculate number of MCQ and open-ended questions
+    num_mcq = max(1, num_questions - 1)  # At least 1 MCQ, rest are MCQ
+    num_open_ended = 1  # Always 1 open-ended coding question
+    
     prompt_parts = [
         "Generate a set of professional interview questions for a candidate interview.",
         f"Generate exactly {num_questions} questions.",
         "",
-        "Requirements:",
-        "- Generate MULTIPLE CHOICE QUESTIONS (MCQ) with 4 options each",
-        "- Mix of technical, behavioral, and situational questions",
+        "IMPORTANT REQUIREMENTS:",
+        f"- Generate {num_mcq} MULTIPLE CHOICE QUESTIONS (MCQ) with 4 options each",
+        f"- Generate {num_open_ended} OPEN-ENDED CODING QUESTION (programming/coding question)",
+        "- Mix of technical, behavioral, and situational questions for MCQ",
+        "- The open-ended question MUST be a coding/programming question",
         "- Questions should be relevant to the candidate's background and the job role",
         "- Vary the difficulty levels (easy, medium, hard)",
+        "",
+        "For MCQ questions:",
         "- Each question must have exactly 4 options (A, B, C, D)",
         "- Mark the correct answer option",
-        "- Return the response as a JSON array with the following structure:",
+        "- Set is_mcq: true",
+        "",
+        "For open-ended coding questions:",
+        "- Should be a practical coding problem or algorithm question",
+        "- Do NOT provide options",
+        "- Set is_mcq: false",
+        "- Set question_type: 'coding'",
+        "",
+        "Return the response as a JSON array with the following structure:",
         "",
         """[
     {
         "question_text": "The question text",
-        "question_type": "technical|behavioral|situational|general",
+        "question_type": "technical|behavioral|situational|general|coding",
         "difficulty": "easy|medium|hard",
+        "is_mcq": true,
         "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
         "correct_answer": "A|B|C|D"
+    },
+    {
+        "question_text": "Write a function to solve this problem...",
+        "question_type": "coding",
+        "difficulty": "medium",
+        "is_mcq": false,
+        "options": null,
+        "correct_answer": null
     }
 ]""",
         ""
