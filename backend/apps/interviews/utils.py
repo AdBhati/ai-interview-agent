@@ -90,10 +90,15 @@ def generate_interview_questions(
         if use_openrouter:
             completion_kwargs["response_format"] = {"type": "json_object"}
         
+        print(f"[DEBUG] Generating questions with model: {model}")
+        print(f"[DEBUG] Required skills: {required_skills}")
+        
         response = completion(**completion_kwargs)
         
         # Parse the response
         response_text = response.choices[0].message.content
+        
+        print(f"[DEBUG] AI Response (first 500 chars): {response_text[:500]}")
         
         # Try to parse JSON response
         try:
@@ -129,6 +134,24 @@ def generate_interview_questions(
                 questions = questions_data
             else:
                 raise ValueError("Invalid response format: Expected JSON object or array")
+            
+            # Validate questions are not generic
+            generic_phrases = [
+                "introduce yourself",
+                "tell us about your background",
+                "what interests you",
+                "describe a challenging project",
+                "what are your strengths",
+                "how do you handle"
+            ]
+            
+            for q in questions:
+                if isinstance(q, dict):
+                    question_text = q.get('question_text', '').lower()
+                    # Check if question is generic
+                    if any(phrase in question_text for phrase in generic_phrases):
+                        print(f"[WARNING] Generic question detected: {q.get('question_text', '')[:50]}")
+                        # Don't fail, but log warning
             
             # Ensure we have the right number of questions
             questions = questions[:num_questions]
@@ -178,15 +201,29 @@ def generate_interview_questions(
             return formatted_questions[:num_questions]
             
         except (json.JSONDecodeError, ValueError, KeyError) as e:
-            # If JSON parsing fails, try to extract questions from text
-            print(f"Error parsing JSON response: {e}")
-            print(f"Response text: {response_text[:500]}")
-            return parse_questions_from_text(response_text, num_questions)
+            # If JSON parsing fails, log error and raise instead of silently falling back
+            print(f"[ERROR] Failed to parse JSON response: {e}")
+            print(f"[ERROR] Response text (first 1000 chars): {response_text[:1000]}")
+            print(f"[ERROR] Full response length: {len(response_text)}")
+            # Try to extract questions from text as last resort
+            try:
+                parsed = parse_questions_from_text(response_text, num_questions)
+                if parsed and len(parsed) > 0:
+                    print(f"[WARNING] Using parsed text questions (may be generic)")
+                    return parsed
+            except Exception as parse_err:
+                print(f"[ERROR] Failed to parse from text: {parse_err}")
+            
+            # If we reach here, parsing completely failed
+            raise ValueError(f"Failed to generate questions: {str(e)}. Please check API configuration and try again.")
     
     except Exception as e:
-        print(f"Error generating questions with LiteLLM: {e}")
-        # Fallback to default questions
-        return get_default_questions(num_questions)
+        print(f"[ERROR] Error generating questions with LiteLLM: {e}")
+        print(f"[ERROR] Exception type: {type(e).__name__}")
+        import traceback
+        print(f"[ERROR] Traceback: {traceback.format_exc()}")
+        # Don't silently fall back - raise error so user knows
+        raise ValueError(f"Failed to generate questions: {str(e)}. Please check your API keys and configuration.")
 
 
 def build_question_generation_prompt(
@@ -206,17 +243,20 @@ def build_question_generation_prompt(
     num_open_ended = 1  # Always 1 open-ended coding question
     
     prompt_parts = [
-        "You are an expert technical interviewer. Generate interview questions based on the job description and required skills.",
+        "You are an expert technical interviewer. Your task is to generate SKILL-SPECIFIC interview questions.",
         f"Generate exactly {num_questions} questions.",
         "",
-        "CRITICAL REQUIREMENTS - READ CAREFULLY:",
+        "🚨 CRITICAL REQUIREMENTS - READ CAREFULLY:",
         "",
-        "1. QUESTION CONTENT (MOST IMPORTANT):",
-        "   - ALL questions MUST be directly related to the REQUIRED SKILLS mentioned in the job description",
-        "   - For technical roles: Generate questions about specific technologies, frameworks, and tools mentioned in required_skills",
-        "   - For coding questions: Use programming languages and concepts from required_skills",
-        "   - Questions should test practical knowledge of the skills listed",
-        "   - DO NOT generate generic questions - they MUST be skill-specific",
+        "1. QUESTION CONTENT (MOST IMPORTANT - DO NOT IGNORE):",
+        "   - ALL questions MUST test knowledge of the SPECIFIC SKILLS listed in required_skills",
+        "   - For each skill mentioned, create questions that test practical understanding",
+        "   - Example: If 'Python' is in required_skills, ask about Python syntax, libraries, or best practices",
+        "   - Example: If 'Django' is in required_skills, ask about Django models, views, or ORM",
+        "   - Example: If 'LLMs' is in required_skills, ask about transformer architecture, fine-tuning, or API usage",
+        "   - DO NOT generate generic behavioral questions like 'introduce yourself' or 'what interests you'",
+        "   - DO NOT generate questions unrelated to the required skills",
+        "   - Questions MUST be technical and skill-focused",
         "",
         "2. QUESTION TYPES:",
         f"   - Generate {num_mcq} MULTIPLE CHOICE QUESTIONS (MCQ) with 4 options each",
@@ -244,26 +284,39 @@ def build_question_generation_prompt(
         "   - Questions must be relevant to the job role and required skills",
         "   - Consider the candidate's background from resume if provided",
         "",
-        "Return the response as a JSON array with the following structure:",
+        "Return the response as a JSON object with a 'questions' array:",
         "",
-        """[
-    {
-        "question_text": "The question text",
-        "question_type": "technical|behavioral|situational|general|coding",
-        "difficulty": "easy|medium|hard",
-        "is_mcq": true,
-        "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
-        "correct_answer": "A|B|C|D"
-    },
-    {
-        "question_text": "Write a function to solve this problem...",
-        "question_type": "coding",
-        "difficulty": "medium",
-        "is_mcq": false,
-        "options": null,
-        "correct_answer": null
-    }
-]""",
+        """{
+    "questions": [
+        {
+            "question_text": "What is the time complexity of Python's list.append() method?",
+            "question_type": "technical",
+            "difficulty": "medium",
+            "is_mcq": true,
+            "options": [
+                "O(1) - Constant time",
+                "O(n) - Linear time",
+                "O(log n) - Logarithmic time",
+                "O(n²) - Quadratic time"
+            ],
+            "correct_answer": "A"
+        },
+        {
+            "question_text": "Write a Python function to implement a binary search algorithm.",
+            "question_type": "coding",
+            "difficulty": "medium",
+            "is_mcq": false,
+            "options": null,
+            "correct_answer": null
+        }
+    ]
+}""",
+        "",
+        "IMPORTANT:",
+        "- For MCQ questions: Make options specific and technical, not generic",
+        "- Questions MUST test actual knowledge of the required skills",
+        "- Avoid generic questions like 'introduce yourself' or 'what interests you'",
+        "- Focus on technical concepts, frameworks, tools, and programming skills",
         ""
     ]
     

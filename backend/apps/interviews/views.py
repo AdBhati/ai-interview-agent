@@ -466,6 +466,12 @@ def generate_questions(request, interview_id):
     
     # Generate questions using AI
     try:
+        if not required_skills:
+            return Response(
+                {'error': 'Job description must have required_skills to generate relevant questions'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         questions_data = generate_interview_questions(
             resume_text=resume_text,
             job_description=job_description,
@@ -474,6 +480,12 @@ def generate_questions(request, interview_id):
             experience_level=experience_level,
             num_questions=num_questions
         )
+        
+        if not questions_data or len(questions_data) == 0:
+            return Response(
+                {'error': 'Failed to generate questions. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
         
         # Delete existing questions for this interview
         Question.objects.filter(interview=interview).delete()
