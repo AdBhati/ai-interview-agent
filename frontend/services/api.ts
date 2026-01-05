@@ -4,9 +4,8 @@
 import axios from 'axios';
 
 // Backend API base URL
-// In development, this will proxy to Django backend
-// In production, set this to your backend URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Heroku deployed backend URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://ai-interview-agent-4b4b22e44ca7.herokuapp.com';
 
 // Create axios instance with default config
 const apiClient = axios.create({
