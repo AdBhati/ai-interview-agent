@@ -30,10 +30,23 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-k6v&r_1w#(x90q#ys!6ry-oj3j
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-# Allow Heroku host
+# Allow Heroku host and all hosts in development
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',') if os.getenv('ALLOWED_HOSTS') else []
-if not ALLOWED_HOSTS:
-    ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+
+# If ALLOWED_HOSTS is empty or contains '*', allow all hosts
+if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS:
+    ALLOWED_HOSTS = ['*']
+else:
+    # Add common localhost hosts
+    if 'localhost' not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append('localhost')
+    if '127.0.0.1' not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append('127.0.0.1')
+    
+    # Add Heroku app hostname if on Heroku
+    if os.getenv('DYNO'):  # DYNO is set by Heroku
+        # Extract app name from DATABASE_URL or use wildcard
+        ALLOWED_HOSTS.append('*')
 
 
 # Application definition
