@@ -161,15 +161,17 @@ export default function ATSMatchesPage() {
     router.push(`/interview-config?jd=${jobDescriptionId}&resume=${resumeId}&match=${matchId}`);
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 70) return 'text-green-600 bg-green-50 border-green-200';
-    if (score >= 50) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+  const getScoreColor = (score: number | string) => {
+    const numScore = typeof score === 'string' ? parseFloat(score) : score;
+    if (numScore >= 70) return 'text-green-600 bg-green-50 border-green-200';
+    if (numScore >= 50) return 'text-yellow-600 bg-yellow-50 border-yellow-200';
     return 'text-red-600 bg-red-50 border-red-200';
   };
 
-  const getScoreLabel = (score: number) => {
-    if (score >= 70) return 'Strong Match';
-    if (score >= 50) return 'Moderate Match';
+  const getScoreLabel = (score: number | string) => {
+    const numScore = typeof score === 'string' ? parseFloat(score) : score;
+    if (numScore >= 70) return 'Strong Match';
+    if (numScore >= 50) return 'Moderate Match';
     return 'Weak Match';
   };
 
