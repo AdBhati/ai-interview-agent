@@ -49,27 +49,44 @@ def generate_interview_questions(
             num_questions=num_questions
         )
         
-        # Get API key from environment (OpenRouter or OpenAI)
-        api_key = os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY') or os.getenv('LITELLM_API_KEY')
+        # Get API key from environment (Gemini, OpenRouter, or OpenAI)
+        api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY') or os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY') or os.getenv('LITELLM_API_KEY')
         
         if not api_key:
             # Fallback: return default questions if no API key
             return get_default_questions(num_questions)
         
-        # Determine model - OpenRouter models use openrouter/ prefix
-        model = os.getenv('LITELLM_MODEL', 'gpt-3.5-turbo')
-        use_openrouter = os.getenv('OPENROUTER_API_KEY') is not None
+        # Determine model - Default to Gemini if GEMINI_API_KEY is set
+        use_gemini = os.getenv('GEMINI_API_KEY') is not None or os.getenv('GOOGLE_API_KEY') is not None
+        use_openrouter = os.getenv('OPENROUTER_API_KEY') is not None and not use_gemini
         
-        # Configure for OpenRouter
-        if use_openrouter:
-            # Ensure model has openrouter/ prefix
+        if use_gemini:
+            # Use Google Gemini via Google AI Studio (not Vertex AI)
+            # For Google AI Studio API keys, use 'gemini/gemini-1.5-flash' format
+            model = os.getenv('LITELLM_MODEL', 'gemini/gemini-1.5-flash')
+            # Ensure it has gemini/ prefix for Google AI Studio
+            if not model.startswith('gemini/'):
+                model = f'gemini/{model}'
+            # Set environment variable for LiteLLM (Google AI Studio uses GEMINI_API_KEY)
+            os.environ['GEMINI_API_KEY'] = api_key
+            # Unset GOOGLE_APPLICATION_CREDENTIALS to avoid Vertex AI auth
+            if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
+                del os.environ['GOOGLE_APPLICATION_CREDENTIALS']
+            print(f"[DEBUG] Using Gemini (Google AI Studio) with model: {model}")
+            print(f"[DEBUG] API Key set in env: {bool(os.getenv('GEMINI_API_KEY'))}")
+        elif use_openrouter:
+            # Use OpenRouter
+            model = os.getenv('LITELLM_MODEL', 'openrouter/anthropic/claude-3-haiku')
             if not model.startswith('openrouter/'):
                 model = f'openrouter/{model}' if not model.startswith('openrouter/') else model
-            # Set environment variable for LiteLLM
             os.environ['OPENROUTER_API_KEY'] = api_key
+            print(f"[DEBUG] Using OpenRouter with model: {model}")
+        else:
+            # Default to OpenAI
+            model = os.getenv('LITELLM_MODEL', 'gpt-3.5-turbo')
+            print(f"[DEBUG] Using OpenAI with model: {model}")
         
-        # For OpenRouter, LiteLLM automatically uses OPENROUTER_API_KEY env var
-        # For OpenAI, it uses OPENAI_API_KEY env var
+        # For all providers, LiteLLM automatically uses the respective API key env var
         completion_kwargs = {
             "model": model,
             "messages": [
@@ -83,15 +100,19 @@ def generate_interview_questions(
                 }
             ],
             "temperature": 0.7,
-            "max_tokens": 2000
+            "max_tokens": 4000,
         }
         
-        # Add JSON response format for OpenRouter
+        # Add JSON response format
         if use_openrouter:
             completion_kwargs["response_format"] = {"type": "json_object"}
+        elif use_gemini:
+            # Gemini supports JSON mode via response_mime_type
+            # Also add response_schema to ensure proper JSON structure
+            completion_kwargs["response_mime_type"] = "application/json"
         
         print(f"[DEBUG] Generating questions with model: {model}")
-        print(f"[DEBUG] Required skills: {required_skills}")
+        print(f"[DEBUG] Required skills: {required_skills[:100] if required_skills else 'None'}...")
         
         response = completion(**completion_kwargs)
         
@@ -592,8 +613,8 @@ Provide your evaluation in JSON format:
 
 Be thorough and constructive in your feedback."""
 
-        # Get API key from environment (OpenRouter or OpenAI)
-        api_key = os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY') or os.getenv('LITELLM_API_KEY')
+        # Get API key from environment (Gemini, OpenRouter, or OpenAI)
+        api_key = os.getenv('GEMINI_API_KEY') or os.getenv('GOOGLE_API_KEY') or os.getenv('OPENROUTER_API_KEY') or os.getenv('OPENAI_API_KEY') or os.getenv('LITELLM_API_KEY')
         
         if not api_key:
             # Fallback evaluation
@@ -604,19 +625,32 @@ Be thorough and constructive in your feedback."""
                 'improvements': 'Consider providing more specific examples and details.'
             }
         
-        # Determine model - OpenRouter models use openrouter/ prefix
-        model = os.getenv('LITELLM_MODEL', 'gpt-3.5-turbo')
-        use_openrouter = os.getenv('OPENROUTER_API_KEY') is not None
+        # Determine model - Default to Gemini if GEMINI_API_KEY is set
+        use_gemini = os.getenv('GEMINI_API_KEY') is not None or os.getenv('GOOGLE_API_KEY') is not None
+        use_openrouter = os.getenv('OPENROUTER_API_KEY') is not None and not use_gemini
         
-        # Configure for OpenRouter
-        if use_openrouter:
-            # Ensure model has openrouter/ prefix
+        if use_gemini:
+            # Use Google Gemini via Google AI Studio (not Vertex AI)
+            # For Google AI Studio API keys, use 'gemini/gemini-1.5-flash' format
+            model = os.getenv('LITELLM_MODEL', 'gemini/gemini-1.5-flash')
+            # Ensure it has gemini/ prefix for Google AI Studio
+            if not model.startswith('gemini/'):
+                model = f'gemini/{model}'
+            os.environ['GEMINI_API_KEY'] = api_key
+            # Unset GOOGLE_APPLICATION_CREDENTIALS to avoid Vertex AI auth
+            if 'GOOGLE_APPLICATION_CREDENTIALS' in os.environ:
+                del os.environ['GOOGLE_APPLICATION_CREDENTIALS']
+        elif use_openrouter:
+            # Use OpenRouter
+            model = os.getenv('LITELLM_MODEL', 'openrouter/anthropic/claude-3-haiku')
             if not model.startswith('openrouter/'):
                 model = f'openrouter/{model}' if not model.startswith('openrouter/') else model
-            # Set environment variable for LiteLLM
             os.environ['OPENROUTER_API_KEY'] = api_key
+        else:
+            # Default to OpenAI
+            model = os.getenv('LITELLM_MODEL', 'gpt-3.5-turbo')
         
-        # For OpenRouter, LiteLLM automatically uses OPENROUTER_API_KEY env var
+        # For all providers, LiteLLM automatically uses the respective API key env var
         completion_kwargs = {
             "model": model,
             "messages": [
@@ -630,12 +664,15 @@ Be thorough and constructive in your feedback."""
                 }
             ],
             "temperature": 0.5,
-            "max_tokens": 1500
+            "max_tokens": 1500,
         }
         
-        # Add JSON response format for OpenRouter
+        # Add JSON response format
         if use_openrouter:
             completion_kwargs["response_format"] = {"type": "json_object"}
+        elif use_gemini:
+            # Gemini supports JSON mode via response_mime_type
+            completion_kwargs["response_mime_type"] = "application/json"
         
         response = completion(**completion_kwargs)
         
