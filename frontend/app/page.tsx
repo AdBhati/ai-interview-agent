@@ -55,16 +55,16 @@ export default function Home() {
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
-              href="/upload"
+              href="/job-description"
               className="px-8 py-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-semibold text-lg shadow-lg"
             >
-              Get Started
+              Create Job Description
             </Link>
             <Link
-              href="/interview"
+              href="/upload"
               className="px-8 py-4 bg-white text-blue-500 border-2 border-blue-500 rounded-lg hover:bg-blue-50 transition-colors font-semibold text-lg shadow-lg"
             >
-              Start Interview
+              Upload Resume
             </Link>
           </div>
 
