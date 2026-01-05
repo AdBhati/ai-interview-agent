@@ -122,6 +122,8 @@ export const api = {
       apiClient.post(`/api/interviews/job-descriptions/${jobDescriptionId}/match-all-resumes/`),
     getMatches: (jobDescriptionId: number, params?: { status?: string; min_score?: number }) => 
       apiClient.get(`/api/interviews/job-descriptions/${jobDescriptionId}/matches/`, { params }),
+    getResumesForJD: (jobDescriptionId: number, params?: { matched_only?: boolean; unmatched_only?: boolean }) => 
+      apiClient.get(`/api/interviews/job-descriptions/${jobDescriptionId}/resumes/`, { params }),
     getAllMatches: (params?: { job_description_id?: number; status?: string; min_score?: number }) => 
       apiClient.get('/api/interviews/ats-matches/', { params }),
     updateMatchStatus: (matchId: number, status: string) => 

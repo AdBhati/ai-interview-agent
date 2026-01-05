@@ -34,6 +34,7 @@ urlpatterns = [
     path('job-descriptions/<int:job_description_id>/match-resume/', views.match_resume_to_jd, name='match_resume_to_jd'),
     path('job-descriptions/<int:job_description_id>/match-all-resumes/', views.match_all_resumes_to_jd, name='match_all_resumes_to_jd'),
     path('job-descriptions/<int:job_description_id>/matches/', views.get_ats_matches, name='get_ats_matches'),
+    path('job-descriptions/<int:job_description_id>/resumes/', views.get_resumes_for_jd, name='get_resumes_for_jd'),
     path('ats-matches/', views.get_all_ats_matches, name='get_all_ats_matches'),
     path('ats-matches/<int:match_id>/status/', views.update_ats_match_status, name='update_ats_match_status'),
 ]

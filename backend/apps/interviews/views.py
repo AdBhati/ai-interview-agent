@@ -1182,6 +1182,100 @@ def get_ats_matches(request, job_description_id):
 
 
 @api_view(['GET'])
+def get_resumes_for_jd(request, job_description_id):
+    """
+    Get all resumes associated with a job description (matched and unmatched)
+    
+    GET /api/interviews/job-descriptions/{id}/resumes/
+    
+    Query params:
+    - matched_only: If true, return only matched resumes (default: false)
+    - unmatched_only: If true, return only unmatched resumes (default: false)
+    
+    Response:
+    {
+        "job_description_id": 1,
+        "job_description_title": "Software Engineer",
+        "matched_resumes": [
+            {
+                "id": 1,
+                "original_filename": "resume.pdf",
+                "file_size_mb": 0.5,
+                "status": "extracted",
+                "match_score": 85.5,
+                "match_id": 10,
+                "created_at": "2024-01-05T20:00:00Z"
+            }
+        ],
+        "unmatched_resumes": [
+            {
+                "id": 2,
+                "original_filename": "resume2.pdf",
+                "file_size_mb": 0.3,
+                "status": "extracted",
+                "created_at": "2024-01-05T21:00:00Z"
+            }
+        ],
+        "total_matched": 1,
+        "total_unmatched": 1
+    }
+    """
+    try:
+        job_description = JobDescription.objects.get(id=job_description_id)
+    except JobDescription.DoesNotExist:
+        return Response(
+            {'error': 'Job description not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    from apps.resumes.models import Resume
+    from apps.resumes.serializers import ResumeSerializer
+    
+    # Get all matched resumes for this JD
+    matches = ATSMatch.objects.filter(job_description=job_description).select_related('resume')
+    matched_resume_ids = set(matches.values_list('resume_id', flat=True))
+    
+    # Get all resumes
+    all_resumes = Resume.objects.filter(status='extracted', extracted_text__isnull=False).exclude(extracted_text='')
+    
+    # Build matched resumes with match info
+    matched_resumes_data = []
+    for match in matches:
+        resume_data = ResumeSerializer(match.resume).data
+        resume_data['match_score'] = float(match.overall_score)
+        resume_data['match_id'] = match.id
+        resume_data['match_status'] = match.status
+        matched_resumes_data.append(resume_data)
+    
+    # Get unmatched resumes
+    unmatched_resumes = all_resumes.exclude(id__in=matched_resume_ids)
+    unmatched_resumes_data = ResumeSerializer(unmatched_resumes, many=True).data
+    
+    # Apply filters
+    matched_only = request.query_params.get('matched_only', 'false').lower() == 'true'
+    unmatched_only = request.query_params.get('unmatched_only', 'false').lower() == 'true'
+    
+    response_data = {
+        'job_description_id': job_description_id,
+        'job_description_title': job_description.title,
+    }
+    
+    if unmatched_only:
+        response_data['unmatched_resumes'] = unmatched_resumes_data
+        response_data['total_unmatched'] = len(unmatched_resumes_data)
+    elif matched_only:
+        response_data['matched_resumes'] = matched_resumes_data
+        response_data['total_matched'] = len(matched_resumes_data)
+    else:
+        response_data['matched_resumes'] = matched_resumes_data
+        response_data['unmatched_resumes'] = unmatched_resumes_data
+        response_data['total_matched'] = len(matched_resumes_data)
+        response_data['total_unmatched'] = len(unmatched_resumes_data)
+    
+    return Response(response_data)
+
+
+@api_view(['GET'])
 def get_all_ats_matches(request):
     """
     Get all ATS matches across all job descriptions

@@ -70,13 +70,24 @@ export default function ATSMatchesPage() {
       const jdResponse = await api.jobDescriptions.get(jobDescriptionId);
       setJobDescription(jdResponse.data);
 
-      // Load matches
+      // Load matches for this JD (this already filters by JD)
       const matchesResponse = await api.interviews.getMatches(jobDescriptionId);
-      setMatches(matchesResponse.data.matches || []);
+      const jdMatches = matchesResponse.data.matches || [];
+      setMatches(jdMatches);
 
-      // Load all resumes
+      // Get resume IDs that are already matched to this JD
+      const matchedResumeIds = new Set(jdMatches.map((m: ATSMatch) => m.resume));
+
+      // Load all resumes, but we'll filter to show only unmatched ones for this JD
       const resumesResponse = await api.resumes.list();
-      setAllResumes(resumesResponse.data || []);
+      const allResumes = resumesResponse.data || [];
+      
+      // Filter: Only show resumes that are NOT matched to this JD yet
+      // This allows the same resume to be matched to multiple JDs
+      const unmatchedResumesForJD = allResumes.filter(
+        (r: Resume) => !matchedResumeIds.has(r.id) && r.status === 'extracted'
+      );
+      setAllResumes(unmatchedResumesForJD);
     } catch (err: any) {
       console.error('Error loading data:', err);
       setError(err.response?.data?.error || 'Failed to load data');
@@ -175,9 +186,8 @@ export default function ATSMatchesPage() {
     return 'Weak Match';
   };
 
-  // Get resumes that are matched
-  const matchedResumeIds = new Set(matches.map(m => m.resume));
-  const unmatchedResumes = allResumes.filter(r => !matchedResumeIds.has(r.id) && r.status === 'extracted');
+  // allResumes already contains only unmatched resumes for this JD
+  const unmatchedResumes = allResumes;
 
   return (
     <div className="min-h-screen bg-gray-100 py-8 px-4">
