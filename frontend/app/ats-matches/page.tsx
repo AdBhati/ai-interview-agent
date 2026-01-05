@@ -285,9 +285,9 @@ export default function ATSMatchesPage() {
                       <span>Matched: {new Date(match.created_at).toLocaleDateString()}</span>
                     </div>
                   </div>
-                  <div className={`px-6 py-3 rounded-lg font-semibold border-2 ${getScoreColor(match.overall_score)}`}>
-                    <div className="text-3xl text-center">{match.overall_score.toFixed(1)}%</div>
-                    <div className="text-xs text-center mt-1">{getScoreLabel(match.overall_score)}</div>
+                  <div className={`px-6 py-3 rounded-lg font-semibold border-2 ${getScoreColor(Number(match.overall_score))}`}>
+                    <div className="text-3xl text-center">{Number(match.overall_score).toFixed(1)}%</div>
+                    <div className="text-xs text-center mt-1">{getScoreLabel(Number(match.overall_score))}</div>
                   </div>
                 </div>
 
@@ -295,15 +295,15 @@ export default function ATSMatchesPage() {
                 <div className="grid grid-cols-3 gap-4 mb-4">
                   <div className="bg-gray-50 p-3 rounded text-center">
                     <div className="text-xs text-gray-600 mb-1">Skills</div>
-                    <div className="text-xl font-semibold">{match.skills_score.toFixed(1)}%</div>
+                    <div className="text-xl font-semibold">{Number(match.skills_score).toFixed(1)}%</div>
                   </div>
                   <div className="bg-gray-50 p-3 rounded text-center">
                     <div className="text-xs text-gray-600 mb-1">Experience</div>
-                    <div className="text-xl font-semibold">{match.experience_score.toFixed(1)}%</div>
+                    <div className="text-xl font-semibold">{Number(match.experience_score).toFixed(1)}%</div>
                   </div>
                   <div className="bg-gray-50 p-3 rounded text-center">
                     <div className="text-xs text-gray-600 mb-1">Education</div>
-                    <div className="text-xl font-semibold">{match.education_score.toFixed(1)}%</div>
+                    <div className="text-xl font-semibold">{Number(match.education_score).toFixed(1)}%</div>
                   </div>
                 </div>
 
