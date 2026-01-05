@@ -59,6 +59,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # WhiteNoise for static files (Heroku)
     'corsheaders.middleware.CorsMiddleware',  # CORS middleware should be as high as possible
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -93,18 +94,21 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database configuration
 # Heroku uses DATABASE_URL, otherwise use individual settings
-import dj_database_url
-
-DATABASES = {
-    'default': dj_database_url.config(
-        default=os.getenv('DATABASE_URL', ''),
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
-}
-
-# If DATABASE_URL is not set, use individual settings
-if not DATABASES['default']:
+try:
+    import dj_database_url
+    DATABASE_URL = os.getenv('DATABASE_URL')
+    if DATABASE_URL:
+        DATABASES = {
+            'default': dj_database_url.config(
+                default=DATABASE_URL,
+                conn_max_age=600,
+                conn_health_checks=True,
+            )
+        }
+    else:
+        raise ValueError("No DATABASE_URL")
+except (ImportError, ValueError):
+    # Fallback to individual settings
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
@@ -163,15 +167,26 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# WhiteNoise for static files (Heroku)
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+
+# Note: For production on Heroku, consider using S3 for media files
+# as Heroku filesystem is ephemeral
 
 # CORS Configuration
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
+
+# Add frontend URL from environment (for production)
+FRONTEND_URL = os.getenv('FRONTEND_URL', '')
+if FRONTEND_URL:
+    CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
 
 # Allow all origins in development (remove in production)
 CORS_ALLOW_ALL_ORIGINS = DEBUG
@@ -206,11 +221,31 @@ ASGI_APPLICATION = 'config.asgi.application'
 # Redis URL from environment (Heroku provides REDIS_URL)
 REDIS_URL = os.getenv('REDIS_URL', os.getenv('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0'))
 
+# Parse Redis URL for Channels
+def parse_redis_url(url):
+    """Parse Redis URL into host, port, db format"""
+    if not url or '://' not in url:
+        return [('127.0.0.1', 6379)]
+    try:
+        # Format: redis://:password@host:port/db
+        import urllib.parse
+        parsed = urllib.parse.urlparse(url)
+        host = parsed.hostname or '127.0.0.1'
+        port = parsed.port or 6379
+        db = parsed.path.lstrip('/') or '0'
+        password = parsed.password
+        
+        if password:
+            return [f"redis://:{password}@{host}:{port}/{db}"]
+        return [(host, int(port))]
+    except:
+        return [('127.0.0.1', 6379)]
+
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [REDIS_URL] if '://' in REDIS_URL else [('127.0.0.1', 6379)],
+            "hosts": parse_redis_url(REDIS_URL),
         },
     },
 }
