@@ -1,5 +1,79 @@
 # AI Interview System
 
+> **AI-Powered Interview Platform** - Automate your hiring process with intelligent resume matching, AI-generated questions, and automated evaluation.
+
+[![Next.js](https://img.shields.io/badge/Next.js-16.1-black)](https://nextjs.org/)
+[![Django](https://img.shields.io/badge/Django-6.0-green)](https://www.djangoproject.com/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
+[![Python](https://img.shields.io/badge/Python-3.13-blue)](https://www.python.org/)
+
+## 📚 Documentation
+
+- **[Complete Documentation](./DOCUMENTATION.md)** - Full project documentation
+- **[Quick Start Guide](./QUICK_START.md)** - Get started in 5 minutes
+- **[API Documentation](./DOCUMENTATION.md#api-documentation)** - API endpoints reference
+
+## ✨ Features
+
+- 🎯 **ATS Matching** - Automatic resume to job description matching
+- 🤖 **AI Question Generation** - Skill-based questions using Gemini/OpenRouter
+- 📝 **MCQ & Coding Tests** - Multiple choice and open-ended questions
+- 🎥 **Video Monitoring** - Anti-cheating with camera/mic monitoring
+- 📊 **Automated Reports** - AI-powered evaluation and detailed reports
+- 📜 **Interview History** - Track and review all past interviews
+
+## 🚀 Quick Start
+
+```bash
+# Backend
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py runserver
+
+# Frontend (new terminal)
+cd frontend
+npm install
+npm run dev
+```
+
+Visit `http://localhost:3000` 🎉
+
+For detailed setup, see [QUICK_START.md](./QUICK_START.md)
+
+## 🛠 Tech Stack
+
+**Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS  
+**Backend**: Django 6, Django REST Framework, PostgreSQL  
+**AI**: LiteLLM, Gemini 2.5 Flash, OpenRouter  
+**Deployment**: Vercel (Frontend), Heroku (Backend)
+
+## 📖 Usage Flow
+
+1. **Upload Resume** → Upload PDF resume
+2. **Create Job Description** → Add job requirements and skills
+3. **ATS Matching** → Automatic matching with scoring
+4. **Configure Interview** → Set questions and time limit
+5. **Generate Questions** → AI creates skill-based questions
+6. **Take Test** → MCQ and coding questions with video monitoring
+7. **View Results** → Automated evaluation and detailed reports
+
+## 🔗 Links
+
+- **Frontend**: [Vercel Deployment](https://interview-agent-orcin.vercel.app)
+- **Backend**: [Heroku Deployment](https://ai-interview-agent-4b4b22e44ca7.herokuapp.com)
+- **Documentation**: [Complete Docs](./DOCUMENTATION.md)
+
+## 📝 License
+
+[Add your license here]
+
+---
+
+**AI Interview System** - Making hiring smarter, faster, and fairer.
+
 A comprehensive AI-powered interview practice platform built with Django (Backend) and Next.js (Frontend). Practice your interview skills with AI-generated questions, get real-time feedback, and receive detailed performance reports.
 
 ## 🚀 Features

@@ -181,6 +181,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://interview-agent-orcin.vercel.app",
 ]
 
 # Add frontend URL from environment (for production)
@@ -189,7 +190,8 @@ if FRONTEND_URL:
     CORS_ALLOWED_ORIGINS.append(FRONTEND_URL)
 
 # Allow all origins in development (remove in production)
-CORS_ALLOW_ALL_ORIGINS = DEBUG
+# Also allow all in production for flexibility (can be restricted later if needed)
+CORS_ALLOW_ALL_ORIGINS = DEBUG or os.getenv('CORS_ALLOW_ALL', 'False') == 'True'
 
 CORS_ALLOW_CREDENTIALS = True
 

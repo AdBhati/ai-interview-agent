@@ -12,6 +12,7 @@ urlpatterns = [
     
     # Interview Session endpoints
     path('', views.create_interview, name='create_interview'),
+    path('history/', views.get_interview_history, name='get_interview_history'),
     path('<int:interview_id>/', views.get_interview, name='get_interview'),
     path('<int:interview_id>/start/', views.start_interview, name='start_interview'),
     path('<int:interview_id>/complete/', views.complete_interview, name='complete_interview'),
