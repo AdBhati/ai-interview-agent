@@ -7,6 +7,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/services/api';
+import VideoMonitoring from '@/components/VideoMonitoring';
 
 interface Question {
   id: number;
@@ -46,6 +47,7 @@ export default function InterviewPage() {
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [violations, setViolations] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (interviewId) {
@@ -193,6 +195,14 @@ export default function InterviewPage() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const handleViolation = (type: 'mobile' | 'multiple_faces' | 'no_camera') => {
+    setViolations((prev) => {
+      const newViolations = new Set(prev);
+      newViolations.add(type);
+      return newViolations;
+    });
+  };
+
   const currentQuestion = questions[currentQuestionIndex];
   const currentAnswer = currentQuestion ? answers.get(currentQuestion.id) : null;
   const currentOpenEndedAnswer = currentQuestion ? openEndedAnswers.get(currentQuestion.id) || '' : '';
@@ -227,7 +237,35 @@ export default function InterviewPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8 px-4">
+    <div className="min-h-screen bg-gray-100 py-8 px-4 relative">
+      {/* Video Monitoring Component */}
+      {testStarted && <VideoMonitoring onViolation={handleViolation} />}
+      
+      {/* Violation Warning Banner */}
+      {violations.size > 0 && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-2xl w-full mx-4">
+          <div className="bg-red-100 border-2 border-red-500 rounded-lg p-4 shadow-lg">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">⚠️</span>
+              <div className="flex-1">
+                <h3 className="font-bold text-red-800">Test Monitoring Alert</h3>
+                <ul className="text-sm text-red-700 mt-1">
+                  {violations.has('mobile') && (
+                    <li>• Mobile device detected. Please use a desktop/laptop for the test.</li>
+                  )}
+                  {violations.has('multiple_faces') && (
+                    <li>• Multiple people detected in camera. Only the test taker should be visible.</li>
+                  )}
+                  {violations.has('no_camera') && (
+                    <li>• Camera access is required. Please enable camera permissions.</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-4xl mx-auto">
         {/* Header with Timer */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
