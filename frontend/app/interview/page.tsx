@@ -53,10 +53,38 @@ export default function InterviewPage() {
     if (interviewId) {
       loadInterview();
     } else {
-      setError('Interview ID not found');
-      setLoading(false);
+      // For testing: Allow test mode without interview ID
+      const testMode = searchParams.get('test') === 'true';
+      if (testMode) {
+        // Test mode: Create dummy questions for video testing
+        setQuestions([
+          {
+            id: 1,
+            question_text: 'Test Question 1: What is React?',
+            question_type: 'technical',
+            is_mcq: true,
+            options: ['A JavaScript library', 'A database', 'A server', 'A framework'],
+            correct_answer: 'A',
+            order_index: 0,
+          },
+          {
+            id: 2,
+            question_text: 'Test Question 2: Write a function to reverse a string.',
+            question_type: 'coding',
+            is_mcq: false,
+            options: [],
+            correct_answer: '',
+            order_index: 1,
+          },
+        ]);
+        setTestStarted(true);
+        setLoading(false);
+      } else {
+        setError('Interview ID not found');
+        setLoading(false);
+      }
     }
-  }, [interviewId]);
+  }, [interviewId, searchParams]);
 
   useEffect(() => {
     if (testStarted && timeRemaining > 0 && !testCompleted) {
