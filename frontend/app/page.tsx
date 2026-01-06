@@ -66,6 +66,12 @@ export default function Home() {
             >
               Upload Resume
             </Link>
+            <Link
+              href="/interview-history"
+              className="px-8 py-4 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold text-lg shadow-lg"
+            >
+              View Interview History
+            </Link>
           </div>
 
           {/* Additional Info */}

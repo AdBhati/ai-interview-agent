@@ -115,6 +115,10 @@ export const api = {
     generateReport: (id: number) => apiClient.post(`/api/interviews/${id}/generate-report/`),
     getReport: (id: number) => apiClient.get(`/api/interviews/${id}/report/`),
     
+    // Interview History endpoint
+    getHistory: (params?: { resume_id?: number; job_description_id?: number; status?: string; limit?: number; offset?: number }) =>
+      apiClient.get('/api/interviews/history/', { params }),
+    
     // ATS Matching endpoints
     matchResume: (jobDescriptionId: number, resumeId: number) => 
       apiClient.post(`/api/interviews/job-descriptions/${jobDescriptionId}/match-resume/`, { resume_id: resumeId }),

@@ -214,6 +214,83 @@ class AnswerCreateSerializer(serializers.ModelSerializer):
         ]
 
 
+class InterviewHistorySerializer(serializers.ModelSerializer):
+    """Comprehensive serializer for interview history with results"""
+    job_description = JobDescriptionSerializer(read_only=True)
+    resume_details = ResumeSerializer(source='resume', read_only=True)
+    questions = QuestionSerializer(many=True, read_only=True)
+    answers = serializers.SerializerMethodField()
+    report = serializers.SerializerMethodField()
+    total_score = serializers.SerializerMethodField()
+    average_score = serializers.SerializerMethodField()
+    completion_percentage = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Interview
+        fields = [
+            'id',
+            'resume',
+            'resume_details',
+            'job_description',
+            'title',
+            'status',
+            'time_limit_minutes',
+            'current_question_index',
+            'total_questions',
+            'started_at',
+            'completed_at',
+            'created_at',
+            'updated_at',
+            # Related data
+            'questions',
+            'answers',
+            'report',
+            'total_score',
+            'average_score',
+            'completion_percentage',
+        ]
+    
+    def get_answers(self, obj):
+        """Get all answers for this interview"""
+        from .models import Answer
+        answers = Answer.objects.filter(interview=obj).order_by('question__order_index')
+        return AnswerSerializer(answers, many=True).data
+    
+    def get_report(self, obj):
+        """Get interview report if available"""
+        try:
+            report = obj.report
+            return InterviewReportSerializer(report).data
+        except:
+            return None
+    
+    def get_total_score(self, obj):
+        """Calculate total score from all answers"""
+        from .models import Answer
+        answers = Answer.objects.filter(interview=obj)
+        total = sum(float(answer.score) for answer in answers if answer.score is not None)
+        return round(total, 2)
+    
+    def get_average_score(self, obj):
+        """Calculate average score from all answers"""
+        from .models import Answer
+        answers = Answer.objects.filter(interview=obj)
+        scored_answers = [a for a in answers if a.score is not None]
+        if not scored_answers:
+            return 0.0
+        avg = sum(float(answer.score) for answer in scored_answers) / len(scored_answers)
+        return round(avg, 2)
+    
+    def get_completion_percentage(self, obj):
+        """Calculate completion percentage"""
+        if obj.total_questions == 0:
+            return 0.0
+        from .models import Answer
+        answered_count = Answer.objects.filter(interview=obj).count()
+        percentage = (answered_count / obj.total_questions) * 100
+        return round(percentage, 2)
+
+
 class InterviewReportSerializer(serializers.ModelSerializer):
     """Serializer for InterviewReport model"""
     interview_details = InterviewSerializer(source='interview', read_only=True)

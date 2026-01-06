@@ -145,6 +145,14 @@ export default function JobDescriptionPage() {
             <h1 className="text-3xl font-bold text-gray-800 mb-2">
               Job Descriptions
             </h1>
+            <div className="flex gap-3 mt-3">
+              <button
+                onClick={() => router.push('/interview-history')}
+                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-semibold text-sm"
+              >
+                📊 Interview History
+              </button>
+            </div>
             <p className="text-gray-600">
               Manage job descriptions and view ATS matches
             </p>

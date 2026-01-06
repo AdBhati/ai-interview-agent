@@ -6,7 +6,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.utils import timezone
 from .models import Interview, JobDescription, Question, Answer, ATSMatch
 from .serializers import (
-    JobDescriptionSerializer, 
+    JobDescriptionSerializer,
     JobDescriptionCreateSerializer,
     InterviewSerializer,
     InterviewCreateSerializer,
@@ -14,7 +14,8 @@ from .serializers import (
     QuestionGenerateSerializer,
     AnswerSerializer,
     ATSMatchSerializer,
-    InterviewReportSerializer
+    InterviewReportSerializer,
+    InterviewHistorySerializer
 )
 from .utils import generate_interview_questions, evaluate_answer, calculate_ats_match
 
@@ -282,6 +283,93 @@ def get_interview(request, interview_id):
             {'error': 'Interview not found'},
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+@api_view(['GET'])
+def get_interview_history(request):
+    """
+    Get interview history with results
+    
+    GET /api/interviews/history/
+    
+    Query params:
+    - resume_id: Filter by resume ID
+    - job_description_id: Filter by job description ID
+    - status: Filter by status (created, in_progress, completed, cancelled)
+    - limit: Limit number of results (default: 50)
+    - offset: Offset for pagination (default: 0)
+    
+    Response:
+    {
+        "count": 10,
+        "results": [
+            {
+                "id": 1,
+                "resume": {...},
+                "job_description": {...},
+                "title": "Interview for Software Engineer",
+                "status": "completed",
+                "total_questions": 5,
+                "total_score": 45.0,
+                "average_score": 9.0,
+                "completion_percentage": 100.0,
+                "questions": [...],
+                "answers": [...],
+                "report": {...},
+                "started_at": "2024-01-05T20:00:00Z",
+                "completed_at": "2024-01-05T20:30:00Z"
+            }
+        ]
+    }
+    """
+    interviews = Interview.objects.select_related('resume', 'job_description').prefetch_related(
+        'questions', 'answers', 'report'
+    ).all()
+    
+    # Filter by resume
+    resume_id = request.query_params.get('resume_id')
+    if resume_id:
+        try:
+            interviews = interviews.filter(resume_id=int(resume_id))
+        except (ValueError, TypeError):
+            return Response(
+                {'error': 'Invalid resume_id'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    # Filter by job description
+    job_description_id = request.query_params.get('job_description_id')
+    if job_description_id:
+        try:
+            interviews = interviews.filter(job_description_id=int(job_description_id))
+        except (ValueError, TypeError):
+            return Response(
+                {'error': 'Invalid job_description_id'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    # Filter by status
+    status_filter = request.query_params.get('status')
+    if status_filter:
+        interviews = interviews.filter(status=status_filter)
+    
+    # Order by most recent first
+    interviews = interviews.order_by('-created_at')
+    
+    # Pagination
+    limit = int(request.query_params.get('limit', 50))
+    offset = int(request.query_params.get('offset', 0))
+    total_count = interviews.count()
+    interviews = interviews[offset:offset + limit]
+    
+    serializer = InterviewHistorySerializer(interviews, many=True)
+    
+    return Response({
+        'count': total_count,
+        'limit': limit,
+        'offset': offset,
+        'results': serializer.data
+    })
 
 
 @api_view(['POST'])
